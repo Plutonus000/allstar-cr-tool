@@ -281,14 +281,34 @@ def _sheets_get_archived_week_keys(clan_tag: str) -> set[str]:
 def _sheets_archive_season(
     season_id: str, created_date: str, clan_tag: str, participant_rows: list[dict], section_index=0
 ) -> None:
+    """
+    ⚠️ Ordre d'écriture important (corrigé le 16/08/2026 soir, suite à un bug
+    signalé par Flo : ancienneté affichée à 4 GDC au lieu de >10) : on écrit
+    les PARTICIPANTS *avant* l'index "seasons". Avant ce correctif, l'ordre
+    était inversé — si l'écriture "seasons" réussissait mais que celle des
+    participants plantait juste après (ex. quota 429 entre les deux appels
+    Sheets), la semaine se retrouvait marquée "déjà archivée" par
+    `get_archived_week_keys()` (qui ne lit QUE la feuille "seasons") alors
+    qu'elle n'avait AUCUNE ligne participant enregistrée — une "semaine
+    fantôme", plus jamais retentée ensuite, tant qu'elle reste dans la fenêtre
+    live de l'API (10 semaines) elle est masquée par le live, mais dès qu'elle
+    en sort elle disparaît DÉFINITIVEMENT de `history.get_full_history()`,
+    faisant baisser artificiellement l'ancienneté calculée. En écrivant les
+    participants EN PREMIER, une semaine n'est marquée "archivée" (donc plus
+    jamais retentée) qu'une fois ses participants réellement enregistrés — un
+    échec partiel laisse la semaine "non archivée", ce qui permet de la
+    retenter proprement au prochain passage de `history.sync_archive()` (une
+    éventuelle ré-écriture des participants est sans risque : dédupliquée par
+    tag dans `history._rebuild_item_from_archive()`, voir le fix "2 pics" du
+    même soir).
+    """
+    if participant_rows:
+        participants_ws = _get_worksheet(PARTICIPANTS_SHEET_NAME, PARTICIPANTS_FIELDS)
+        rows = [[str(r.get(f, "")) for f in PARTICIPANTS_FIELDS] for r in participant_rows]
+        participants_ws.append_rows(rows)
+
     seasons_ws = _get_worksheet(SEASONS_SHEET_NAME, SEASONS_FIELDS)
     seasons_ws.append_row([str(season_id), created_date, clan_tag, _now_iso(), str(section_index)])
-
-    if not participant_rows:
-        return
-    participants_ws = _get_worksheet(PARTICIPANTS_SHEET_NAME, PARTICIPANTS_FIELDS)
-    rows = [[str(r.get(f, "")) for f in PARTICIPANTS_FIELDS] for r in participant_rows]
-    participants_ws.append_rows(rows)
 
 
 def _sheets_get_participants(clan_tag: str, season_ids: Optional[set[str]] = None) -> list[dict]:
@@ -388,6 +408,14 @@ def _local_get_archived_week_keys(clan_tag: str) -> set[str]:
 def _local_archive_season(
     season_id: str, created_date: str, clan_tag: str, participant_rows: list[dict], section_index=0
 ) -> None:
+    """Même ordre d'écriture que `_sheets_archive_season` (participants avant
+    seasons) pour rester cohérent entre les deux backends — voir le
+    commentaire détaillé là-bas (fix "semaine fantôme", 16/08/2026 soir)."""
+    if participant_rows:
+        participants = _local_read(PARTICIPANTS_FILE, [])
+        participants.extend(participant_rows)
+        _local_write(PARTICIPANTS_FILE, participants)
+
     seasons = _local_read(SEASONS_FILE, [])
     seasons.append(
         {
@@ -399,12 +427,6 @@ def _local_archive_season(
         }
     )
     _local_write(SEASONS_FILE, seasons)
-
-    if not participant_rows:
-        return
-    participants = _local_read(PARTICIPANTS_FILE, [])
-    participants.extend(participant_rows)
-    _local_write(PARTICIPANTS_FILE, participants)
 
 
 def _local_get_participants(clan_tag: str, season_ids: Optional[set[str]] = None) -> list[dict]:

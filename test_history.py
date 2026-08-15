@@ -127,4 +127,47 @@ assert item["standings"][0]["clan"]["fame"] == 16 * 20 + 8 * 20  # pas doublé n
 print("_rebuild_item_from_archive (semaine archivée 2x, déduplication) OK")
 
 _reset()
+
+# --- régression (16/08/2026 soir) : une erreur sur UNE semaine ne doit plus
+# faire planter tout l'archivage des autres semaines du lot, ni empêcher une
+# nouvelle tentative à la prochaine interaction de la même session (bug
+# signalé par Flo : ancienneté affichée à 4 GDC au lieu de >10, très
+# probablement causée par des plantages 429 en pleine boucle d'archivage) ---
+_reset()
+_orig_archive_season = storage.archive_season
+
+
+def _flaky_archive_season(season_id, created_date, clan_tag, participant_rows, section_index=0):
+    if str(season_id) == "201":  # simule un 429 sur CETTE semaine précise
+        raise RuntimeError("429 simulé")
+    return _orig_archive_season(season_id, created_date, clan_tag, participant_rows, section_index=section_index)
+
+
+storage.archive_season = _flaky_archive_season
+try:
+    race_log_flaky = [
+        _race(200, "20260901T000000.000Z", {"#A": 16}, section_index=0),  # doit réussir
+        _race(201, "20260908T000000.000Z", {"#A": 16}, section_index=0),  # doit échouer (429 simulé)
+        _race(202, "20260915T000000.000Z", {"#A": 16}, section_index=0),  # doit réussir malgré l'échec précédent
+    ]
+    n = history.sync_archive(race_log_flaky, CLAN_TAG)
+    assert n == 2, n  # 200 et 202 archivées, 201 en échec
+    keys = storage.get_archived_week_keys(CLAN_TAG)
+    assert keys == {"200_0", "202_0"}, keys  # 201 absente, pas de "semaine fantôme"
+    # Le clan ne doit PAS être marqué "synced" (il y a eu une erreur) — un
+    # nouvel appel dans la même session doit retenter la semaine manquante.
+    assert CLAN_TAG not in st.session_state.get(history._SYNCED_FLAG, set())
+finally:
+    storage.archive_season = _orig_archive_season
+
+# Deuxième passage (comme un rerun Streamlit dans la même session) : la
+# semaine 201 doit maintenant être archivée avec succès (plus de panne simulée).
+n2 = history.sync_archive(race_log_flaky, CLAN_TAG)
+assert n2 == 1, n2  # seulement 201 restait à archiver
+keys2 = storage.get_archived_week_keys(CLAN_TAG)
+assert keys2 == {"200_0", "201_0", "202_0"}, keys2
+assert CLAN_TAG in st.session_state.get(history._SYNCED_FLAG, set())  # cette fois, tout a réussi
+print("sync_archive (résilience : 1 échec n'interrompt pas les autres, retenté au passage suivant) OK")
+
+_reset()
 print("\nTOUS LES TESTS HISTORY PASSENT")

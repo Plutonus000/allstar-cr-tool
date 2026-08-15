@@ -105,13 +105,23 @@ _WIDE_TEXT_COLUMNS = {
 }
 
 
-def mobile_column_config(columns: list[str], wide_cols: set[str] | None = None) -> dict:
+def mobile_column_config(
+    columns: list[str], wide_cols: set[str] | None = None, number_formats: dict[str, str] | None = None
+) -> dict:
     """
     Config de colonnes resserrées pour st.dataframe (demande de Flo,
     16/08/2026 soir : "sur mobile, il faudrait resserrer les colonnes dans les
     tableaux"). Toutes les colonnes passent en largeur "small" SAUF celles de
     `wide_cols` (par défaut `_WIDE_TEXT_COLUMNS` : les colonnes texte type nom
     de joueur, qu'on ne veut pas tronquer).
+
+    `number_formats` (optionnel) : {nom_colonne: format_printf} pour forcer
+    l'affichage d'une colonne numérique (ex. "%.2f" pour 2 décimales) —
+    nécessaire car st.dataframe (glide-data-grid) peut afficher un float natif
+    avec un nombre de décimales excessif (ex. "42.0000000000" plutôt que
+    "42.0") si aucun format n'est précisé, même si la valeur Python sous-jacente
+    est déjà arrondie via `round()` (bug signalé par Flo, 16/08/2026 soir, sur
+    la colonne "Assiduité %").
 
     ⚠️ Ne couvre PAS le centrage du contenu des cellules — st.dataframe (rendu
     via un composant "glide-data-grid" en interne depuis les versions récentes
@@ -123,7 +133,14 @@ def mobile_column_config(columns: list[str], wide_cols: set[str] | None = None) 
     import streamlit as st
 
     wide = wide_cols if wide_cols is not None else _WIDE_TEXT_COLUMNS
-    return {c: st.column_config.Column(width="small") for c in columns if c not in wide}
+    formats = number_formats or {}
+    config: dict = {}
+    for c in columns:
+        if c in formats:
+            config[c] = st.column_config.NumberColumn(c, format=formats[c], width=None if c in wide else "small")
+        elif c not in wide:
+            config[c] = st.column_config.Column(width="small")
+    return config
 
 
 def paired_decks_color_row(row, decks_col: str, diff_col: str) -> list[str]:

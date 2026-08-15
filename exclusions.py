@@ -123,7 +123,9 @@ def compute_player_stats(gdcs: list[dict], clan_tag: str) -> dict:
         assiduity = s["total_decks"] / max_decks if max_decks else 0.0
         avg_fame = s["total_fame"] / g
         s["avg_fame"] = round(avg_fame)
-        s["assiduity_pct"] = round(assiduity * 100, 1)
+        # Arrondi au centième (2 décimales) — demande de Flo, 16/08/2026 soir
+        # (affichage type "42.0000000000" dans le tableau Classement).
+        s["assiduity_pct"] = round(assiduity * 100, 2)
         s["ranking_score"] = avg_fame * assiduity
 
     return stats

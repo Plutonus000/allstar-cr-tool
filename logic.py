@@ -57,7 +57,8 @@ def compute_ranking(race_log_items: list[dict], clan_tag: str, n_races: int) -> 
 
     df = pd.DataFrame(rows.values())
     df["Decks max"] = df["GDC jouées"] * 16
-    df["Assiduité %"] = (df["Decks joués"] / df["Decks max"] * 100).round(1)
+    # Arrondi au centième (2 décimales), cohérent avec exclusions.compute_player_stats.
+    df["Assiduité %"] = (df["Decks joués"] / df["Decks max"] * 100).round(2)
     df["Trophées moy./GDC"] = (df["Trophées totaux"] / df["GDC jouées"]).round(0).astype(int)
     df = df.sort_values(["Assiduité %", "Trophées totaux"], ascending=False).reset_index(drop=True)
     df.insert(0, "Rang", range(1, len(df) + 1))

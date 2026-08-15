@@ -234,11 +234,20 @@ def render(ctx: dict, viewed_player: dict | None = None) -> None:
     st.subheader("🏠 Mon profil" if is_self else f"🔍 Profil de {display_name}")
     st.markdown(f"**{display_name}** — {ROLE_LABELS.get(role, role or '?')}")
 
-    # On demande large (52 ~ un an de GDC hebdomadaires) : l'API renvoie simplement
-    # tout ce qu'elle a réellement en historique, sans erreur si elle en a moins.
-    HISTORY_FETCH_LIMIT = 52
+    # ⚠️ limit=10 ici (pas plus) — corrigé le 16/08/2026 soir (bug signalé par
+    # Flo : ancienneté à 4 GDC dans Exclusions alors que "Mon profil" montrait
+    # bien 10 GDC). Cette page demandait auparavant `limit=52` en espérant que
+    # l'API renvoie plus que 10 semaines si elle en avait plus (elle ne le
+    # fait JAMAIS, voir history.py) — mais `data.load_race_log` est mis en
+    # cache PAR VALEUR de `limit` (st.cache_data), donc `limit=52` ici et
+    # `limit=10` utilisé par toutes les autres pages (Suivi clan, Classement,
+    # Statistiques...) créaient DEUX entrées de cache indépendantes, pouvant
+    # légitimement contenir des données différentes selon le moment où chacune
+    # a été peuplée/rafraîchie — d'où l'incohérence "10 ici, 4 là-bas" alors
+    # qu'il s'agit du même historique réel. Toutes les pages utilisent
+    # maintenant la même limite pour partager la même entrée de cache.
     try:
-        race_log = data.load_race_log(clan_tag, limit=HISTORY_FETCH_LIMIT)
+        race_log = data.load_race_log(clan_tag, limit=10)
     except api.ClashAPIError as exc:
         st.error(str(exc))
         return

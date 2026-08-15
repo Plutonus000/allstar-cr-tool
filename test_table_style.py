@@ -61,4 +61,10 @@ styled_none = ts.highlight_player_row(df_players.style, "Tag", "")
 assert "border-top: 2px solid" not in styled_none.to_html()
 print("highlight_player_row (bordure sur la ligne du joueur connecté) OK")
 
+# --- mobile_column_config : resserrement + format numérique optionnel ---
+cfg = ts.mobile_column_config(["Rang", "Joueur", "Assiduité %"], number_formats={"Assiduité %": "%.2f"})
+assert set(cfg.keys()) == {"Rang", "Assiduité %"}, cfg  # "Joueur" est une colonne large (par défaut), pas resserrée
+assert cfg["Assiduité %"]["type_config"]["format"] == "%.2f", cfg["Assiduité %"]
+print("mobile_column_config (resserrement + format numérique) OK")
+
 print("\nTOUS LES TESTS TABLE_STYLE PASSENT")

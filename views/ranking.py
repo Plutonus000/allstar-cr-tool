@@ -239,7 +239,11 @@ def render(ctx: dict) -> None:
                         hide_index=True,
                         use_container_width=False,
                         height=_table_height(len(section)),
-                        column_config=ts.mobile_column_config(cols_to_show),
+                        # "Assiduité %" forcée à 2 décimales (demande de Flo,
+                        # 16/08/2026 soir — affichage type "42.0000000000" sinon).
+                        column_config=ts.mobile_column_config(
+                            cols_to_show, number_formats={"Assiduité %": "%.2f"}
+                        ),
                     )
                 if not shown_any:
                     st.info("Aucun joueur ne correspond au filtre.")

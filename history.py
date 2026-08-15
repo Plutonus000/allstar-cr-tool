@@ -58,26 +58,46 @@ def _participant_rows(item: dict, clan_tag: str) -> list[dict]:
 def sync_archive(race_log_items: list[dict], clan_tag: str) -> int:
     """
     Archive les GDC terminées du race_log live qui ne le sont pas encore.
-    Ne s'exécute qu'une fois par session Streamlit et par clan (évite de
-    re-vérifier l'archive à chaque interaction) — voir _SYNCED_FLAG.
+    Ne s'exécute qu'une fois PAR SESSION Streamlit et par clan EN CAS DE
+    SUCCÈS COMPLET (évite de re-vérifier l'archive à chaque interaction) —
+    voir _SYNCED_FLAG. Si une erreur survient sur une semaine, le clan n'est
+    PAS marqué comme synchronisé, pour que la prochaine interaction de la même
+    session retente (voir ci-dessous).
 
     Un `seasonId` Supercell peut regrouper plusieurs semaines de GDC
     (`sectionIndex` 0 à 3) : on identifie donc chaque semaine par
     (season_id, section_index) — voir storage.week_key() — plutôt que par
     season_id seul, sous peine de perdre silencieusement des semaines.
 
-    Renvoie le nombre de nouvelles semaines archivées.
+    ⚠️ Résilience ajoutée le 16/08/2026 soir (bug signalé par Flo : ancienneté
+    affichée à 4 GDC au lieu de >10 dans l'onglet Exclusions) : chaque semaine
+    est archivée dans son propre `try/except`. Avant ce correctif, une seule
+    erreur (typiquement `gspread.exceptions.APIError [429]`, voir storage.py)
+    sur UNE semaine faisait planter toute la boucle — et donc toute la page,
+    voire l'app entière si appelé depuis app.py — AVANT que les semaines
+    suivantes du lot n'aient pu être archivées. Avec beaucoup de 429 survenus
+    ces derniers jours, il est très probable que l'archive de plusieurs
+    joueurs (dont Flo) se soit arrêtée en cours de route, sous-estimant leur
+    ancienneté réelle tant que ces semaines restent visibles dans la fenêtre
+    live de l'API (elles se rattraperont automatiquement au fil des prochains
+    chargements, une fois le 429 corrigé — voir aussi le fix d'ordre
+    d'écriture dans storage._sheets_archive_season/_local_archive_season pour
+    éviter les "semaines fantômes").
+
+    Renvoie le nombre de nouvelles semaines effectivement archivées (peut être
+    inférieur au nombre de semaines à archiver s'il y a eu des erreurs).
     """
     synced = st.session_state.setdefault(_SYNCED_FLAG, set())
     if clan_tag in synced:
         return 0
-    synced.add(clan_tag)
 
     if not race_log_items:
+        synced.add(clan_tag)
         return 0
 
     already = storage.get_archived_week_keys(clan_tag)
     archived_count = 0
+    had_error = False
     for item in race_log_items:
         season_id = str(item.get("seasonId", ""))
         section_index = item.get("sectionIndex", 0)
@@ -87,9 +107,20 @@ def sync_archive(race_log_items: list[dict], clan_tag: str) -> int:
         if key in already:
             continue
         rows = _participant_rows(item, clan_tag)
-        storage.archive_season(season_id, item.get("createdDate", ""), clan_tag, rows, section_index=section_index)
+        try:
+            storage.archive_season(
+                season_id, item.get("createdDate", ""), clan_tag, rows, section_index=section_index
+            )
+        except Exception:
+            # Ne fait PAS planter la page : cette semaine sera retentée au
+            # prochain appel (ce clan n'est pas marqué "synced" plus bas).
+            had_error = True
+            continue
         already.add(key)
         archived_count += 1
+
+    if not had_error:
+        synced.add(clan_tag)
 
     if archived_count:
         _archived_week_meta.clear()
