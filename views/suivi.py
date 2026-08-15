@@ -203,6 +203,13 @@ def _render_exclusions_tab(ctx: dict) -> None:
     """Recommandations d'exclusion, en 3 colonnes (exclusions / avertissements
     / grâces — demande de Flo, 15/08/2026 soir)."""
     clan_tag = ctx["clan_tag"]
+
+    # Récap du règlement, tout en haut de l'onglet, avant les rapports —
+    # demande de Flo, 16/08/2026 soir (pendant du récap affiché aux joueurs
+    # sur "Mon profil", même source : exclusions.rules_summary_markdown()).
+    with st.expander("📜 Règlement du clan (résumé)", expanded=True):
+        st.markdown(exclusions.rules_summary_markdown())
+
     full_history = _load_full_history(clan_tag)
     if full_history is None:
         st.error("Impossible de charger l'historique GDC (API indisponible).")

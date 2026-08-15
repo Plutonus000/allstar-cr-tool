@@ -223,6 +223,35 @@ def ranked_list(stats: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def rules_summary_markdown() -> str:
+    """
+    Résumé court (liste à puces) du règlement des exclusions (Règles 1 à 7 —
+    voir docstring du module pour le détail complet), affiché aux joueurs sur
+    "Mon profil" (à côté de "Points à surveiller") et aux chefs sur "Suivi
+    clan" > "Exclusions" (tout en haut, avant les rapports) — demande de Flo,
+    16/08/2026 soir. Généré à partir des constantes du module ci-dessus pour
+    ne jamais diverger des vraies règles appliquées par le moteur.
+    """
+    return (
+        "- **1ère GDC dans le clan** : toujours exemptée, quel que soit son contenu.\n"
+        f"- **Ancienneté actuelle ≤ {TENURE_DIRECT_MAX} GDC** : un deck manquant sur une GDC = "
+        "exclusion directe (pas de grâce, pas d'avertissement).\n"
+        f"- **Ancienneté actuelle entre {TENURE_DIRECT_MAX + 1} et {NB_GDC - 1} GDC** : chaque GDC "
+        f"incomplète (sur les {NB_GDC} dernières) = 1 avertissement.\n"
+        f"- **Ancienneté actuelle ≥ {NB_GDC} GDC** : sur les {NB_GDC} dernières GDC, la 1ère incomplète "
+        "= grâce automatique, chaque suivante = 1 avertissement.\n"
+        f"- **{GRACE_TO_WARN_RATIO} grâces cumulées** (fenêtre glissante) = 1 avertissement supplémentaire généré.\n"
+        "- **Attaque de bateau adverse** = exclusion directe, quelle que soit l'ancienneté "
+        "(sauf en semaine d'arrivée).\n"
+        f"- **{WARN_TO_EXCL_THRESHOLD} avertissements actifs** (sur les {NB_GDC} dernières GDC) = "
+        "recommandation d'exclusion.\n"
+        f"- Tout se calcule sur une fenêtre glissante des {NB_GDC} dernières GDC — un manquement ancien "
+        "sort automatiquement du compte au fil des semaines.\n"
+        "- L'ancienneté prise en compte est **toujours celle d'aujourd'hui**, pas celle que le joueur "
+        "avait à l'époque de chaque semaine passée."
+    )
+
+
 def manual_grace_keys(graces: list[dict]) -> set[tuple[str, str]]:
     """Convertit storage.get_manual_graces() en ensemble (tag_normalisé, season_id) —
     utilisé pour repérer quelles semaines ont été graciées manuellement par un chef."""
@@ -273,14 +302,30 @@ def _all_players_weeks(full_history: list[dict], clan_tag: str) -> dict[str, lis
     return per_player
 
 
-def _week_status(week: dict, window: list[dict], is_manual: bool) -> tuple[str, str, bool]:
+def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure: int) -> tuple[str, str, bool]:
     """
-    Statut d'UNE semaine, comme si elle avait été la plus récente au moment
-    où elle a eu lieu (nécessaire pour le comptage glissant correct des
-    Règles 5/6 — voir _compute_weekly_statuses).
+    Statut d'UNE semaine — voir _compute_weekly_statuses().
 
     `window` = les <=10 semaines du joueur se terminant à `week` INCLUSE
     (dans l'ordre chronologique), utilisé uniquement pour la Règle 4.
+
+    `current_tenure` = ancienneté ACTUELLE du joueur (celle d'AUJOURD'HUI,
+    pas celle qu'il avait au moment de `week`) — demande explicite de Flo,
+    16/08/2026 soir : "je voudrais que l'ancienneté prise en compte soit
+    l'ancienneté ACTUELLE". Avant ce changement, chaque semaine était jugée
+    selon l'ancienneté du joueur À CETTE ÉPOQUE (`week["tenure"]`) — un
+    manquement commis quand le joueur était encore nouveau restait
+    définitivement marqué "Règle 2" (exclusion directe, sans grâce) même des
+    mois plus tard une fois le joueur devenu vétéran, tant que cette semaine
+    restait dans la fenêtre glissante de 10 GDC (Règle 6). Désormais, TOUTES
+    les semaines de la fenêtre sont rejugées avec l'ancienneté DU JOUR : un
+    vétéran (>=10 GDC aujourd'hui) voit ses vieux manquements traités par la
+    Règle 4 (grâce/avertissement), pas par la Règle 2/3, même s'ils dataient
+    d'une époque où il avait moins de GDC d'ancienneté. Seule la Règle 1
+    (semaine d'arrivée exemptée) reste basée sur l'ancienneté DE L'ÉPOQUE
+    (`week["is_join_week"]`, `week["tenure"] == 1`) — c'est un fait structurel
+    (quelle semaine était la toute première), pas une question de sévérité
+    qui doit s'assouplir avec le temps.
 
     Renvoie (status, motif, manual) — status parmi :
     'exempt' / 'ok' / 'grace' / 'warning' / 'excl_direct'.
@@ -288,7 +333,6 @@ def _week_status(week: dict, window: list[dict], is_manual: bool) -> tuple[str, 
     if week["is_join_week"]:
         return "exempt", "1ère GDC du joueur dans le clan — toujours exemptée (Règle 1).", False
 
-    tenure = week["tenure"]
     decks = week["decks"]
     boats = week["boats"]
     complete = decks >= FULL_DECKS
@@ -297,31 +341,30 @@ def _week_status(week: dict, window: list[dict], is_manual: bool) -> tuple[str, 
         base, motif = "excl_direct", f"{boats} attaque(s) de bateau adverse (Règle 7)"
     elif complete:
         base, motif = "ok", ""
-    elif tenure <= TENURE_DIRECT_MAX:
+    elif current_tenure <= TENURE_DIRECT_MAX:
         base, motif = "excl_direct", (
-            f"{decks}/{FULL_DECKS} decks joués, {tenure} GDC d'ancienneté dans le clan "
+            f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle "
             f"(≤{TENURE_DIRECT_MAX} — Règle 2)"
         )
-    elif tenure < NB_GDC:
+    elif current_tenure < NB_GDC:
         base, motif = "warning", (
-            f"{decks}/{FULL_DECKS} decks joués, {tenure} GDC d'ancienneté (Règle 3)"
+            f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle (Règle 3)"
         )
     else:
         # Règle 4 : parmi les semaines de la fenêtre relevant elles aussi de la
-        # Règle 4 (ancienneté >= 10, incomplètes, sans bateau — les semaines
-        # Règle 2/3 et les semaines "bateau" ont déjà leur propre statut
-        # indépendant, elles ne concourent pas pour la grâce), la 1ère
-        # chronologiquement = grâce, les suivantes = avertissement.
-        # Seuil ">= NB_GDC" (10 GDC ou plus) et non "> NB_GDC" (corrigé le
-        # 15/08/2026 après un bug signalé par Flo : l'outil n'ayant encore que
-        # NB_GDC=10 semaines en mémoire pour l'instant, un joueur présent
-        # depuis le début plafonne à tenure=10 et n'atteignait donc JAMAIS
-        # l'ancien seuil ">10" — la grâce automatique était inatteignable
-        # pour tout le monde tant que l'archive n'aurait pas dépassé 10
-        # semaines).
+        # Règle 4 (incomplètes, sans bateau, hors semaine d'arrivée — les
+        # semaines "bateau" ont déjà leur propre statut indépendant, elles ne
+        # concourent pas pour la grâce), la 1ère chronologiquement = grâce,
+        # les suivantes = avertissement. Plus de filtre sur l'ancienneté ICI
+        # (`w["tenure"] >= NB_GDC`) : on est déjà dans la branche "Règle 4"
+        # parce que `current_tenure >= NB_GDC`, et cette ancienneté actuelle
+        # est désormais la même pour toutes les semaines du joueur — donc
+        # toute semaine incomplète/sans-bateau/hors-arrivée du joueur est un
+        # candidat valable, quelle que soit l'ancienneté qu'il avait CE
+        # jour-là.
         candidates = [
             w for w in window
-            if not w["is_join_week"] and w["boats"] == 0 and w["decks"] < FULL_DECKS and w["tenure"] >= NB_GDC
+            if not w["is_join_week"] and w["boats"] == 0 and w["decks"] < FULL_DECKS
         ]
         if candidates and candidates[0]["week_key"] == week["week_key"]:
             base, motif = "grace", f"{decks}/{FULL_DECKS} decks joués — 1ère GDC incomplète de la fenêtre (Règle 4)"
@@ -335,12 +378,19 @@ def _week_status(week: dict, window: list[dict], is_manual: bool) -> tuple[str, 
 
 
 def _compute_weekly_statuses(weeks: list[dict], manual_seasons: set[str]) -> list[dict]:
-    """Enrichit chaque semaine (chronologique) d'un statut — voir _week_status()."""
+    """Enrichit chaque semaine (chronologique) d'un statut — voir _week_status().
+
+    `current_tenure` = ancienneté du joueur à sa semaine la PLUS RÉCENTE
+    (`weeks[-1]`) — c'est cette ancienneté "d'aujourd'hui" qui sert désormais
+    de référence pour TOUTES les semaines de la fenêtre glissante (voir le
+    docstring de _week_status pour le détail de ce changement, 16/08/2026).
+    """
+    current_tenure = weeks[-1]["tenure"] if weeks else 0
     out = []
     for idx, week in enumerate(weeks):
         window = weeks[max(0, idx - NB_GDC + 1) : idx + 1]
         is_manual = str(week["seasonId"]) in manual_seasons
-        status, motif, manual = _week_status(week, window, is_manual)
+        status, motif, manual = _week_status(week, window, is_manual, current_tenure)
         out.append({**week, "status": status, "motif": motif, "manual": manual})
     return out
 

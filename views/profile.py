@@ -353,11 +353,49 @@ def render(ctx: dict, viewed_player: dict | None = None) -> None:
     st.markdown("**Progression dans le clan**")
     _render_progress_timeline(streak, role)
 
-    _render_warnings_graces_section(full_history, clan_tag, player_tag, is_self=is_self, display_name=display_name)
-
     subj_est = "Tu es" if is_self else f"{display_name} est"
     subj_as = "Tu as" if is_self else f"{display_name} a"
     subj_etais = "Tu étais" if is_self else f"{display_name} était"
+
+    # "Points à surveiller" + récap du règlement, remontés juste après la
+    # frise et tout en haut de la page — demande de Flo, 16/08/2026 soir
+    # ("remonter 'points à surveiller' tout en haut de la page ... juste
+    # après la frise" + "un petit récap des règles du clan ... à côté
+    # justement de 'points à surveiller'"). Le récap est généré par
+    # exclusions.rules_summary_markdown() (source unique, partagée avec
+    # Suivi clan > Exclusions) pour ne jamais diverger du moteur de règles.
+    st.markdown("---")
+    col_watch, col_rules = st.columns(2)
+    with col_watch:
+        st.markdown("**Points à surveiller**")
+        if not history:
+            st.caption("Pas encore d'historique de GDC disponible.")
+        else:
+            recent_miss = next((h for h in history if not h["full"]), None)
+            if recent_miss is None:
+                st.write("✅ Aucun manque détecté sur l'historique disponible — continue comme ça !" if is_self
+                          else f"✅ Aucun manque détecté sur l'historique disponible pour {display_name}.")
+            else:
+                if not recent_miss["present"]:
+                    st.write(
+                        f"⚠️ {subj_etais} absent de la GDC du {fmt.format_date(recent_miss['createdDate'])} — "
+                        "ça casse la série pour l'éligibilité Aîné/Chef adjoint."
+                    )
+                else:
+                    advice = (
+                        "pense à jouer tous tes decks chaque jour de GDC pour construire ta série."
+                        if is_self else "à surveiller pour la suite."
+                    )
+                    st.write(
+                        f"⚠️ GDC du {fmt.format_date(recent_miss['createdDate'])} : "
+                        f"{recent_miss['decks_used']}/16 decks joués — {advice}"
+                    )
+    with col_rules:
+        st.markdown("**📜 Règlement du clan (résumé)**")
+        with st.container(border=True):
+            st.markdown(exclusions.rules_summary_markdown())
+
+    _render_warnings_graces_section(full_history, clan_tag, player_tag, is_self=is_self, display_name=display_name)
 
     if role in ("coLeader", "leader"):
         st.success(
@@ -382,32 +420,6 @@ def render(ctx: dict, viewed_player: dict | None = None) -> None:
             )
         else:
             st.info(f"Encore {status['weeks_to_elder']} semaine(s) à 100% d'assiduité pour être éligible Aîné.")
-
-    # Messages d'amélioration
-    st.markdown("---")
-    st.markdown("**Points à surveiller**")
-    if not history:
-        st.caption("Pas encore d'historique de GDC disponible.")
-    else:
-        recent_miss = next((h for h in history if not h["full"]), None)
-        if recent_miss is None:
-            st.write("✅ Aucun manque détecté sur l'historique disponible — continue comme ça !" if is_self
-                      else f"✅ Aucun manque détecté sur l'historique disponible pour {display_name}.")
-        else:
-            if not recent_miss["present"]:
-                st.write(
-                    f"⚠️ {subj_etais} absent de la GDC du {fmt.format_date(recent_miss['createdDate'])} — "
-                    "ça casse la série pour l'éligibilité Aîné/Chef adjoint."
-                )
-            else:
-                advice = (
-                    "pense à jouer tous tes decks chaque jour de GDC pour construire ta série."
-                    if is_self else "à surveiller pour la suite."
-                )
-                st.write(
-                    f"⚠️ GDC du {fmt.format_date(recent_miss['createdDate'])} : "
-                    f"{recent_miss['decks_used']}/16 decks joués — {advice}"
-                )
 
     with st.expander(f"Historique détaillé ({len(history)} GDC disponibles via l'API)"):
         for h in history:

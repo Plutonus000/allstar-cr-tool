@@ -65,7 +65,15 @@ def _base_layout(fig: go.Figure, y_title: str) -> go.Figure:
         showlegend=False,
         dragmode=False,
         xaxis=dict(showgrid=False, fixedrange=True),
-        yaxis=dict(title=y_title, showgrid=True, gridcolor=GRID_COLOR, zeroline=False, fixedrange=True),
+        # rangemode="tozero" : l'ordonnée part toujours de 0 plutôt que de
+        # zoomer automatiquement sur la plage des valeurs (demande de Flo,
+        # 16/08/2026 soir, pour "Trophées du clan"/"Trophées moyens par
+        # joueur" — "Taux de participation" a déjà sa propre plage fixe
+        # [0, 100] passée explicitement via y_range, qui prévaut sur ceci).
+        yaxis=dict(
+            title=y_title, showgrid=True, gridcolor=GRID_COLOR, zeroline=False,
+            fixedrange=True, rangemode="tozero",
+        ),
     )
     return fig
 
