@@ -314,6 +314,14 @@ def render(ctx: dict) -> None:
             if not race_log:
                 st.info("Aucun historique disponible.")
             else:
+                # Comme pour "GDC en cours" (bug "83 joueurs") : l'API garde dans
+                # `participants` tout joueur ayant un jour fait partie du clan
+                # durant cette GDC, y compris ceux qui l'ont quitté depuis — sans
+                # filtrage, "Détail par joueur" affichait des dizaines de lignes
+                # fantômes à 0 decks/0 trophées (confirmé par Flo, 16/08/2026 soir :
+                # 123 lignes dont 73 à "0 0 0" pour un clan à 50 membres). On ne
+                # garde que les membres ACTUELS, comme dans les autres onglets.
+                current_tags_hist = _current_member_tags(clan_tag)
                 # Regroupé par saison (une saison = 1 à 4 semaines de GDC) avec
                 # une fourchette de dates plutôt qu'une entrée par semaine, et
                 # jusqu'à 4 tableaux affichés d'un coup pour la saison choisie
@@ -336,12 +344,33 @@ def render(ctx: dict) -> None:
                         st.markdown(
                             f"#### Semaine {item.get('sectionIndex', i) + 1} — {fmt.format_date(item.get('createdDate', ''))}"
                         )
+                    # ⚠️ Pour NOTRE clan, on recalcule "Trophées" à partir des
+                    # participants (dédupliqués) plutôt que d'utiliser le champ
+                    # officiel "clan.fame" tel quel — corrigé le 16/08/2026 soir
+                    # (même bug que le graphique Statistiques, voir
+                    # logic.compute_gdc_series : ce champ Supercell n'est pas
+                    # fiable sur les sections intermédiaires d'une saison à
+                    # plusieurs semaines). Pour les clans ADVERSES on n'a pas
+                    # accès à leur liste de participants (l'API ne la fournit
+                    # que pour notre propre clan) — on garde donc le champ
+                    # officiel pour eux, faute de mieux.
+                    def _row_trophies(s: dict) -> int:
+                        if logic.norm_tag(s.get("clan", {}).get("tag", "")) == logic.norm_tag(clan_tag):
+                            by_tag: dict[str, dict] = {}
+                            for p in s.get("clan", {}).get("participants", []):
+                                tag = p.get("tag", "")
+                                existing = by_tag.get(tag)
+                                if existing is None or p.get("decksUsed", 0) > existing.get("decksUsed", 0):
+                                    by_tag[tag] = p
+                            return sum(p.get("fame", 0) for p in by_tag.values())
+                        return s.get("clan", {}).get("fame", 0)
+
                     standings_df = pd.DataFrame(
                         [
                             {
                                 "Rang": s.get("rank"),
                                 "Clan": s.get("clan", {}).get("name", "?"),
-                                "Trophées": s.get("clan", {}).get("fame", 0),
+                                "Trophées": _row_trophies(s),
                                 "Δ Trophées (clan)": s.get("trophyChange", 0),
                             }
                             for s in item.get("standings", [])
@@ -359,6 +388,12 @@ def render(ctx: dict) -> None:
                     )
                     if our_standing:
                         st.markdown("**Détail par joueur (notre clan) — classé par Trophées :**")
+                        participants_hist = our_standing["clan"].get("participants", [])
+                        if current_tags_hist is not None:
+                            participants_hist = [
+                                p for p in participants_hist
+                                if logic.norm_tag(p.get("tag", "")) in current_tags_hist
+                            ]
                         detail_df = pd.DataFrame(
                             [
                                 {
@@ -368,7 +403,7 @@ def render(ctx: dict) -> None:
                                     "Trophées": p.get("fame", 0),
                                     "Attaques bateau adverse": p.get("boatAttacks", 0),
                                 }
-                                for p in our_standing["clan"].get("participants", [])
+                                for p in participants_hist
                             ]
                         ).sort_values("Trophées", ascending=False).reset_index(drop=True)
                         detail_df.insert(0, "Rang", range(1, len(detail_df) + 1))

@@ -190,7 +190,22 @@ def compute_gdc_series(full_history: list[dict], clan_tag: str) -> pd.DataFrame:
             continue
         decks_used = sum(p.get("decksUsed", 0) for p in participants)
         decks_max = n * FULL_DECKS_PER_GDC
-        clan_fame = standing["clan"].get("fame", sum(p.get("fame", 0) for p in participants))
+        # ⚠️ Corrigé le 16/08/2026 soir (bug signalé par Flo : 2 "pics" à
+        # >100 000 trophées sur ce graphique, avec toutes les autres semaines
+        # anormalement basses). On sommait auparavant le champ officiel
+        # `standing["clan"]["fame"]` fourni par Supercell en priorité — mais
+        # pour une saison qui s'étale sur plusieurs semaines (`sectionIndex`
+        # 0 à 4+, ex. "GDC #133" sur 5 semaines), ce champ ne semble fiable
+        # QUE sur la DERNIÈRE section de la saison ; les sections
+        # intermédiaires renvoient une valeur bien trop basse côté Supercell,
+        # alors que la liste `participants[].fame` (que l'on somme ici,
+        # dédupliquée par tag) reste correcte et cohérente sur CHAQUE section
+        # — confirmé en comparant les captures de Flo (Historique GDC, qui
+        # lit les mêmes participants, montrait bien un total ~100k pour une
+        # semaine que ce graphique affichait à ~4k). On calcule donc
+        # désormais TOUJOURS le total à partir des participants, sans jamais
+        # faire confiance à `clan.fame` pour ce graphique.
+        clan_fame = sum(p.get("fame", 0) for p in participants)
         created_date = item.get("createdDate", "")
         season_id = str(item.get("seasonId", ""))
         section_index = item.get("sectionIndex", 0)

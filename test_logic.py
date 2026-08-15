@@ -137,6 +137,27 @@ assert row100["TrophéesClan"] == 12000
 assert row100["TrophéeMoyenParJoueur"] == 6000.0
 print("compute_gdc_series OK")
 
+# --- régression (16/08/2026 soir) : "clan.fame" officiel de Supercell peu fiable
+# sur les sections intermédiaires d'une saison à plusieurs semaines (bug signalé
+# par Flo : 2 pics à >100 000 trophées, toutes les autres semaines anormalement
+# basses). On doit TOUJOURS sommer les participants, jamais faire confiance au
+# champ clan.fame — même s'il est présent avec une valeur (trop basse). ---
+fake_unreliable_fame = [
+    {
+        "seasonId": "133", "sectionIndex": 0, "createdDate": "20260608T000000.000Z",
+        "standings": [
+            {"clan": {"tag": "#2Q2Q889", "fame": 4000, "participants": [  # "fame" officiel trop bas
+                {"tag": "#A", "name": "Alice", "decksUsed": 16, "fame": 60000},
+                {"tag": "#B", "name": "Bob", "decksUsed": 16, "fame": 45000},
+            ]}}
+        ],
+    },
+]
+series_unreliable = app.compute_gdc_series(fake_unreliable_fame, "#2Q2Q889")
+row_unreliable = series_unreliable.iloc[0]
+assert row_unreliable["TrophéesClan"] == 105000, row_unreliable["TrophéesClan"]  # somme des participants, pas 4000
+print("compute_gdc_series (clan.fame officiel ignoré, somme des participants utilisée) OK")
+
 f_last1 = app.filter_gdc_series(series, "last1")
 assert len(f_last1) == 1 and f_last1.iloc[0]["seasonId"] == "100"
 f_last10 = app.filter_gdc_series(series, "last10")
