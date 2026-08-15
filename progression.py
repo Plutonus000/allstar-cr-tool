@@ -1,5 +1,5 @@
 """
-progression.py — série d'assiduité, éligibilité Aîné/Co-chef, écarts au règlement.
+progression.py — série d'assiduité, éligibilité Aîné/Chef adjoint, écarts au règlement.
 
 Logique pure (pas de Streamlit, pas de réseau) — testable indépendamment.
 """
@@ -133,7 +133,7 @@ def find_rule_violations(race_log_items: list[dict], clan_tag: str, n_races: int
 def find_promotable_players(members: list[dict], race_log_items: list[dict], clan_tag: str) -> list[dict]:
     """
     Pour chaque membre (rôle 'member' ou 'elder'), calcule sa série et indique
-    s'il vient d'atteindre le palier Aîné ou Co-chef. Les rôles déjà au niveau
+    s'il vient d'atteindre le palier Aîné ou Chef adjoint. Les rôles déjà au niveau
     ou au-dessus (coLeader/leader) sont exclus — rien à promouvoir.
     """
     promotable = []
@@ -146,5 +146,5 @@ def find_promotable_players(members: list[dict], race_log_items: list[dict], cla
         if role == "member" and status["elder_eligible"]:
             promotable.append({**m, "streak_weeks": streak, "next_rank": "Aîné"})
         elif role == "elder" and status["coleader_eligible"]:
-            promotable.append({**m, "streak_weeks": streak, "next_rank": "Co-chef"})
+            promotable.append({**m, "streak_weeks": streak, "next_rank": "Chef adjoint"})
     return promotable

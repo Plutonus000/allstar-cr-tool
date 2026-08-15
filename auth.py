@@ -177,6 +177,45 @@ def is_chef() -> bool:
     return is_chef_role(current_role())
 
 
+# Bootstrap UNIQUEMENT (voir is_admin ci-dessous) : le pseudo du compte à
+# traiter comme admin par défaut tant qu'aucun compte n'a encore le statut
+# admin explicite. Correction de Flo (15/08/2026 soir) : le statut admin ne
+# doit PAS être lié au rôle en jeu (Flo/Plutonus n'est pas forcément le Chef
+# du clan) — il doit être attribué à lui spécifiquement, par son pseudo.
+_BOOTSTRAP_ADMIN_NAME = "plutonus"
+
+
+def is_admin() -> bool:
+    """
+    "Admin" est un statut PROPRE À L'OUTIL (champ `is_admin` sur le compte,
+    voir storage.set_admin_status), totalement INDÉPENDANT du rôle en jeu
+    (contrairement à is_chef()) — demande explicite de Flo, 15/08/2026 soir :
+    un statut d'admin "propre à l'app", attribué à lui (Plutonus) précisément
+    et PAS au Chef du clan (il n'est pas forcément Chef), qui donne accès à
+    l'onglet Comptes et à la vue de toutes les suggestions des autres
+    joueurs. Tous les autres comptes sont des "users".
+
+    Bootstrap : tant qu'AUCUN compte n'a encore explicitement ce statut (la
+    toute première fois que l'outil tourne avec cette fonctionnalité), le
+    compte dont le pseudo (`name`) correspond à _BOOTSTRAP_ADMIN_NAME
+    ("Plutonus") est traité comme admin par défaut — uniquement pour
+    pouvoir ouvrir l'onglet Comptes et s'attribuer le statut explicitement
+    une première fois. Dès qu'un compte a le statut admin explicite, ce
+    filet de sécurité ne s'applique plus jamais, peu importe le pseudo.
+    """
+    username = st.session_state.get("username")
+    if not username:
+        return False
+    account = storage.get_accounts().get(username)
+    if not account:
+        return False
+    if storage.account_is_admin(account):
+        return True
+    if not storage.any_admin_exists():
+        return account.get("name", "").strip().lower() == _BOOTSTRAP_ADMIN_NAME
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Demande d'accès
 # ---------------------------------------------------------------------------
@@ -228,41 +267,53 @@ def require_login() -> str:
     gate = st.empty()
 
     with gate.container():
-        st.title("🔒 ALLSTAR — Connexion")
+        # Colonne centrale plus étroite sur grand écran (demande de Flo,
+        # 15/08/2026 soir) — l'écran de connexion prenait toute la largeur,
+        # peu esthétique sur PC.
+        _, col_mid, _ = st.columns([1, 1.3, 1])
+        with col_mid:
+            st.title("🔒 ALLSTAR — Connexion")
+            st.caption(
+                "Outil de suivi du clan **ALLSTAR Belgium** (#2Q2Q889) : classement, "
+                "participation aux GDC, recommandations d'exclusion, statistiques, etc. "
+                "Pas encore de compte ? Clique sur « Demander mon accès » ci-dessous avec "
+                "ton pseudo Clash Royale exact et un mot de passe — un chef du clan devra "
+                "valider ta demande avant que tu puisses te connecter."
+            )
 
-        if st.session_state["show_request_form"]:
-            _request_access_form()
-            st.stop()
+            if st.session_state["show_request_form"]:
+                _request_access_form()
+                st.stop()
 
-        now = time.time()
-        if now < st.session_state["locked_until"]:
-            remaining = int(st.session_state["locked_until"] - now)
-            st.error(f"Trop de tentatives échouées. Réessaie dans {remaining} secondes.")
-            st.stop()
+            now = time.time()
+            if now < st.session_state["locked_until"]:
+                remaining = int(st.session_state["locked_until"] - now)
+                st.error(f"Trop de tentatives échouées. Réessaie dans {remaining} secondes.")
+                st.stop()
 
-        with st.form("login_form"):
-            username = st.text_input("Identifiant")
-            password = st.text_input("Mot de passe", type="password")
-            submitted = st.form_submit_button("Se connecter")
+            with st.form("login_form"):
+                username = st.text_input("Identifiant")
+                password = st.text_input("Mot de passe", type="password")
+                submitted = st.form_submit_button("Se connecter")
 
-        if submitted:
-            ok, message = _do_login(username, password)
-            if ok:
-                gate.empty()
-                st.rerun()
-            else:
-                st.session_state["login_attempts"] += 1
-                if st.session_state["login_attempts"] >= MAX_ATTEMPTS:
-                    st.session_state["locked_until"] = time.time() + LOCKOUT_SECONDS
-                    st.session_state["login_attempts"] = 0
-                    st.error(f"Trop de tentatives échouées. Réessaie dans {LOCKOUT_SECONDS} secondes.")
+            if submitted:
+                ok, message = _do_login(username, password)
+                if ok:
+                    gate.empty()
+                    st.rerun()
                 else:
-                    st.error(message)
+                    st.session_state["login_attempts"] += 1
+                    if st.session_state["login_attempts"] >= MAX_ATTEMPTS:
+                        st.session_state["locked_until"] = time.time() + LOCKOUT_SECONDS
+                        st.session_state["login_attempts"] = 0
+                        st.error(f"Trop de tentatives échouées. Réessaie dans {LOCKOUT_SECONDS} secondes.")
+                    else:
+                        st.error(message)
 
-        st.caption("Pas encore de compte ?")
-        if st.button("Demander mon accès"):
-            st.session_state["show_request_form"] = True
-            st.rerun()
+            st.caption("Pas encore de compte ?")
+            if st.button("Demander mon accès"):
+                st.session_state["show_request_form"] = True
+                st.rerun()
 
     st.stop()
 

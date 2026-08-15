@@ -36,5 +36,12 @@ def load_player(player_tag: str) -> dict:
     return api.get_player(player_tag)
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_player_battlelog(player_tag: str) -> list[dict]:
+    """TTL 30 min comme load_player — le battlelog ne bouge pas assez vite pour
+    justifier un rafraîchissement plus fréquent (voir clash_api.get_player_battlelog)."""
+    return api.get_player_battlelog(player_tag)
+
+
 def clear_all() -> None:
     st.cache_data.clear()

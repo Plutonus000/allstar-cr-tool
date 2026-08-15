@@ -139,6 +139,25 @@ def get_player(player_tag: str) -> dict:
     return _get(f"/players/{tag_encode(player_tag)}")
 
 
+def get_player_battlelog(player_tag: str) -> list[dict]:
+    """
+    Historique récent des combats d'un joueur (/players/{tag}/battlelog) : chaque
+    entrée contient `type`, `battleTime`, et `team`/`opponent` (dont les cartes
+    RÉELLEMENT utilisées dans ce combat précis, contrairement à get_player() qui ne
+    renvoie que la collection complète du joueur).
+
+    ATTENTION (ajouté le 16/08/2026, demande de Flo) : cet endpoint a 2 limites
+    réelles, non vérifiables depuis le sandbox de développement (accès réseau
+    restreint) — à confirmer une fois l'app testée en conditions réelles :
+    1. Rétention limitée côté API — ce n'est PAS un historique complet, seulement
+       les combats les plus récents (nombre exact non documenté officiellement).
+    2. Les valeurs exactes du champ `type` pour les combats de GDC (river race)
+       n'ont pas pu être vérifiées en live — voir logic.compute_maxed_cards_in_war_deck
+       pour le filtre best-effort utilisé en attendant confirmation.
+    """
+    return _get(f"/players/{tag_encode(player_tag)}/battlelog")
+
+
 # ---------------------------------------------------------------------------
 # Calculs utilitaires
 # ---------------------------------------------------------------------------

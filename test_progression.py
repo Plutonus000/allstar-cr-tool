@@ -80,7 +80,7 @@ log6 = [_race(100 - i, f"d{i}", {"#A": 16, "#B": 16, "#C": 16}) for i in range(1
 promotable = prog.find_promotable_players(members, log6, CLAN_TAG)
 names = {p["name"]: p["next_rank"] for p in promotable}
 assert names.get("Alice") == "Aîné"
-assert names.get("Bob") == "Co-chef"
+assert names.get("Bob") == "Chef adjoint"
 assert "Carla" not in names  # déjà leader, exclue
 print("find_promotable_players OK")
 

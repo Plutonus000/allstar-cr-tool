@@ -83,5 +83,46 @@ with patch.object(auth, "find_clan_member", return_value={"tag": "#XYZ999", "rol
     assert ok is True, msg
 print("cas 7 (demande -> approbation -> connexion) OK")
 
+# --- cas 8 : statut admin (propre à l'outil, PAS lié au rôle chef en jeu —
+# correction de Flo, 15/08/2026 soir : il n'est pas forcément Chef du clan) ---
+_reset()
+h = bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode()
+storage.create_account("plutonus", "Plutonus", h, "#PLUTO123")  # pseudo "Plutonus" (bootstrap)
+storage.create_account("bob", "Bob", h, "#BOB999")  # pseudo quelconque, même Chef du clan
+
+# Aucun admin explicite encore -> bootstrap PAR PSEUDO : "Plutonus" est admin
+# par défaut, peu importe son rôle en jeu (même simple membre) ; un autre
+# joueur, même Chef du clan, ne l'est PAS (correction explicite de Flo).
+assert storage.any_admin_exists() is False
+auth.st.session_state["username"] = "plutonus"
+with patch.object(auth, "find_clan_member", return_value={"tag": "#PLUTO123", "role": "member"}):
+    assert auth.is_admin() is True
+auth.st.session_state["username"] = "bob"
+with patch.object(auth, "find_clan_member", return_value={"tag": "#BOB999", "role": "leader"}):
+    assert auth.is_admin() is False
+print("cas 8a (bootstrap par pseudo 'Plutonus', indépendant du rôle en jeu) OK")
+
+# Statut admin explicite accordé à "plutonus" -> il reste admin même si son
+# pseudo change ou s'il perd un éventuel rôle de chef ; "bob" (jamais admin
+# explicite, plus de bootstrap une fois un admin explicite défini) ne l'est pas.
+storage.set_admin_status("plutonus", True)
+assert storage.any_admin_exists() is True
+assert storage.account_is_admin(storage.get_accounts()["plutonus"]) is True
+auth.st.session_state["username"] = "plutonus"
+with patch.object(auth, "find_clan_member", return_value={"tag": "#PLUTO123", "role": "member"}):
+    assert auth.is_admin() is True  # statut explicite, indépendant du rôle
+
+auth.st.session_state["username"] = "bob"
+with patch.object(auth, "find_clan_member", return_value={"tag": "#BOB999", "role": "leader"}):
+    # "bob" est Chef mais PAS admin explicite, et un admin explicite existe
+    # déjà ailleurs -> plus de filet de sécurité bootstrap pour lui.
+    assert auth.is_admin() is False
+print("cas 8b (statut admin explicite, indépendant du rôle, bootstrap désactivé une fois un admin défini) OK")
+
+storage.set_admin_status("plutonus", False)
+assert storage.account_is_admin(storage.get_accounts()["plutonus"]) is False
+print("cas 8c (retrait du statut admin) OK")
+
+auth.st.session_state.pop("username", None)
 _reset()
 print("\nTOUS LES TESTS AUTH PASSENT")

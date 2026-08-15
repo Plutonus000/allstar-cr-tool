@@ -5,3 +5,9 @@ __pycache__/
 accounts.json
 access_requests.json
 service_account.json
+race_log_seasons.json
+race_log_participants.json
+manual_graces.json
+ranking_posts.json
+suggestions.json
+users.json
