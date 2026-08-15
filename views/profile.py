@@ -38,7 +38,7 @@ def _timeline_node(reached: bool, label: str) -> str:
     text_color = "#ffffff" if reached else _TIMELINE_GRAY_TEXT
     mark = "✓" if reached else _STATUS_ICONS.get(label, "")
     return (
-        f'<div style="width:46px;height:46px;border-radius:50%;background:{bg};'
+        f'<div class="allstar-tl-node" style="width:46px;height:46px;border-radius:50%;background:{bg};'
         f'border:3px solid {border};display:flex;align-items:center;justify-content:center;'
         f'font-size:20px;font-weight:700;color:{text_color};margin:0 auto;'
         f'box-shadow:0 2px 6px rgba(0,0,0,0.10);">{mark}</div>'
@@ -71,7 +71,7 @@ def _status_badge(label: str, reached: bool) -> str:
     border = _TIMELINE_GREEN if reached else _TIMELINE_GRAY
     color = "#166534" if reached else _TIMELINE_DARK_TEXT
     return (
-        f'<div style="display:inline-block;padding:7px 16px;border-radius:10px;background:{bg};'
+        f'<div class="allstar-tl-badge" style="display:inline-block;padding:7px 16px;border-radius:10px;background:{bg};'
         f'border:1.5px solid {border};font-size:16px;font-weight:700;color:{color};'
         f'white-space:nowrap;">{icon} {label}</div>'
     )
@@ -108,8 +108,24 @@ def _render_progress_timeline(streak: int, role: str) -> None:
     )
 
     cols = "10% 35% 10% 35% 10%"
+    # Media query mobile (16/08/2026 soir, demande de Flo : "sur mobile, la
+    # frise est trop grande") : rétrécit cercles/badges/textes sous 480px de
+    # large. Les valeurs de base ci-dessus (desktop) restent en style inline ;
+    # `!important` est nécessaire ici pour que la media query l'emporte sur
+    # ces styles inline.
+    style_block = """
+    <style>
+    @media (max-width: 480px) {
+        .allstar-tl-wrap { padding: 12px 8px 10px 8px !important; }
+        .allstar-tl-node { width: 30px !important; height: 30px !important; font-size: 13px !important; border-width: 2px !important; }
+        .allstar-tl-badge { padding: 4px 8px !important; font-size: 11px !important; border-radius: 8px !important; }
+        .allstar-tl-seg-text { font-size: 10px !important; }
+    }
+    </style>
+    """
     html = f"""
-    <div style="margin-top:10px;padding:20px 16px 16px 16px;border-radius:14px;
+    {style_block}
+    <div class="allstar-tl-wrap" style="margin-top:10px;padding:20px 16px 16px 16px;border-radius:14px;
                 background:#fafbfc;border:1px solid #e6eaf0;">
       <div style="display:grid;grid-template-columns:{cols};align-items:center;">
         <div>{_timeline_node(True, "Membre")}</div>
@@ -120,9 +136,9 @@ def _render_progress_timeline(streak: int, role: str) -> None:
       </div>
       <div style="display:grid;grid-template-columns:{cols};margin-top:10px;">
         <div></div>
-        <div style="text-align:center;font-size:13px;font-weight:600;color:#5b6472;">{seg1_text}</div>
+        <div class="allstar-tl-seg-text" style="text-align:center;font-size:13px;font-weight:600;color:#5b6472;">{seg1_text}</div>
         <div></div>
-        <div style="text-align:center;font-size:13px;font-weight:600;color:#5b6472;">{seg2_text}</div>
+        <div class="allstar-tl-seg-text" style="text-align:center;font-size:13px;font-weight:600;color:#5b6472;">{seg2_text}</div>
         <div></div>
       </div>
       <div style="display:grid;grid-template-columns:{cols};margin-top:14px;align-items:center;">

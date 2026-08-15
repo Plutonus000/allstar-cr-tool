@@ -198,8 +198,21 @@ def _get_worksheet(name: str, fields: list[str]):
         creds = Credentials.from_service_account_info(_google_credentials(), scopes=scopes)
         _sheets_client_cache["client"] = gspread.authorize(creds)
 
-    client = _sheets_client_cache["client"]
-    sheet = client.open_by_key(_sheet_id())
+    # `client.open_by_key()` fait un appel réseau (fetch_sheet_metadata) à
+    # CHAQUE fois qu'il est appelé — jusqu'ici il était rappelé à chaque accès
+    # à _get_worksheet(), donc une fois par onglet différent consulté (comptes,
+    # demandes, saisons, participants, grâces, posts classement, suggestions).
+    # Ça a provoqué un dépassement de quota (`APIError [429] Quota exceeded for
+    # ... Read requests`) juste après un redémarrage de l'app le 16/08/2026 —
+    # tous les caches `st.cache_data` étant vides en même temps, une seule page
+    # pouvait déclencher jusqu'à 7-8 appels `open_by_key` d'un coup. Corrigé en
+    # mettant le classeur (Spreadsheet) ouvert en cache lui aussi, comme le
+    # client : un seul appel `open_by_key` par process, plus un par onglet.
+    if "sheet" not in _sheets_client_cache:
+        client = _sheets_client_cache["client"]
+        _sheets_client_cache["sheet"] = client.open_by_key(_sheet_id())
+
+    sheet = _sheets_client_cache["sheet"]
     try:
         ws = sheet.worksheet(name)
     except gspread.WorksheetNotFound:

@@ -172,7 +172,18 @@ def compute_gdc_series(full_history: list[dict], clan_tag: str) -> pd.DataFrame:
         )
         if not standing:
             continue
-        participants = standing["clan"].get("participants", [])
+        # Déduplication défensive par tag (même pattern que
+        # compute_current_race_table, bug "83 joueurs") — garde l'entrée avec
+        # le plus de decks joués. Protège aussi le calcul de repli
+        # (sum(fame) si le champ "fame" officiel est absent) contre un
+        # doublon éventuel de la liste de participants.
+        by_tag: dict[str, dict] = {}
+        for p in standing["clan"].get("participants", []):
+            tag = p.get("tag", "")
+            existing = by_tag.get(tag)
+            if existing is None or p.get("decksUsed", 0) > existing.get("decksUsed", 0):
+                by_tag[tag] = p
+        participants = list(by_tag.values())
         n = len(participants)
         if n == 0:
             continue

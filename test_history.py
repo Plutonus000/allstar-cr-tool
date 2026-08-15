@@ -97,4 +97,34 @@ assert rate_multi == 75.0, rate_multi  # (16 + 8) / (16 + 16) = 75%, les 2 semai
 print("sync_archive + get_full_history (2 semaines, même seasonId) OK")
 
 _reset()
+
+# --- régression (16/08/2026 soir) : semaine archivée deux fois (ex. race condition
+# entre 2 sessions Streamlit concurrentes juste après un redémarrage, cf. bug des
+# "2 pics à >100 000 trophées" signalé par Flo sur le graphique Statistiques) ---
+_reset()
+dup_race = _race(130, "20260822T000000.000Z", {"#A": 16, "#B": 8})
+participant_rows = [
+    {
+        "season_id": "130", "clan_tag": CLAN_TAG, "player_tag": p["tag"], "player_name": p["name"],
+        "decks_used": p["decksUsed"], "fame": p["fame"], "boat_attacks": p["boatAttacks"], "section_index": 0,
+    }
+    for p in dup_race["standings"][0]["clan"]["participants"]
+]
+# Simule le bug : archive_season() appelé 2 fois pour LA MÊME semaine (au lieu
+# d'une seule fois normalement garanti par history.sync_archive), comme 2
+# sessions concurrentes pourraient le faire si elles lisent toutes les deux
+# "pas encore archivé" avant que l'une des deux écrive.
+storage.archive_season("130", "20260822T000000.000Z", CLAN_TAG, participant_rows, section_index=0)
+storage.archive_season("130", "20260822T000000.000Z", CLAN_TAG, participant_rows, section_index=0)
+full_dup = history.get_full_history(CLAN_TAG, [])
+assert len(full_dup) == 1, len(full_dup)  # toujours 1 seule semaine (pas 2 items)
+item = full_dup[0]
+parts = item["standings"][0]["clan"]["participants"]
+assert len(parts) == 2, parts  # dédupliqué : #A et #B, pas 4 lignes
+fame_a = next(p["fame"] for p in parts if p["tag"] == "#A")
+assert fame_a == 16 * 20, fame_a  # pas doublé (320, pas 640)
+assert item["standings"][0]["clan"]["fame"] == 16 * 20 + 8 * 20  # pas doublé non plus (480, pas 960)
+print("_rebuild_item_from_archive (semaine archivée 2x, déduplication) OK")
+
+_reset()
 print("\nTOUS LES TESTS HISTORY PASSENT")

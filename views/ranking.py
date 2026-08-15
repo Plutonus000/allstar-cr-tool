@@ -239,6 +239,7 @@ def render(ctx: dict) -> None:
                         hide_index=True,
                         use_container_width=False,
                         height=_table_height(len(section)),
+                        column_config=ts.mobile_column_config(cols_to_show),
                     )
                 if not shown_any:
                     st.info("Aucun joueur ne correspond au filtre.")
@@ -296,7 +297,10 @@ def render(ctx: dict) -> None:
                 # Ligne du joueur connecté mise en valeur (demande de Flo, 16/08/2026) —
                 # bordure, pas un fond : ne casse pas les couleurs déjà posées ci-dessus.
                 styler = ts.highlight_player_row(styler, "Tag", ctx.get("player_tag", ""))
-                st.dataframe(styler, hide_index=True, use_container_width=False, height=_table_height(len(view)))
+                st.dataframe(
+                    styler, hide_index=True, use_container_width=False, height=_table_height(len(view)),
+                    column_config=ts.mobile_column_config(cols),
+                )
         except api.ClashAPIError as exc:
             st.error(str(exc))
 
@@ -339,7 +343,11 @@ def render(ctx: dict) -> None:
                             for s in item.get("standings", [])
                         ]
                     ).sort_values("Rang")
-                    st.dataframe(standings_df, hide_index=True, use_container_width=False, height=_table_height(len(standings_df)))
+                    st.dataframe(
+                        standings_df, hide_index=True, use_container_width=False,
+                        height=_table_height(len(standings_df)),
+                        column_config=ts.mobile_column_config(list(standings_df.columns)),
+                    )
 
                     our_standing = next(
                         (s for s in item.get("standings", []) if logic.norm_tag(s.get("clan", {}).get("tag", "")) == logic.norm_tag(clan_tag)),
@@ -363,7 +371,11 @@ def render(ctx: dict) -> None:
                         # Ligne du joueur connecté mise en valeur (demande de Flo, 16/08/2026).
                         styler = ts.highlight_player_row(detail_df.style, "Tag", ctx.get("player_tag", ""))
                         styler = styler.hide(axis="columns", subset=["Tag"])
-                        st.dataframe(styler, hide_index=True, use_container_width=False, height=_table_height(len(detail_df)))
+                        st.dataframe(
+                            styler, hide_index=True, use_container_width=False,
+                            height=_table_height(len(detail_df)),
+                            column_config=ts.mobile_column_config(list(detail_df.columns)),
+                        )
                     if len(weeks) > 1 and i < len(weeks) - 1:
                         st.divider()
         except api.ClashAPIError as exc:

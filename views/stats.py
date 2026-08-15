@@ -49,14 +49,23 @@ def _narrow_selectbox(label: str, options, index: int = 0, key: str | None = Non
         return st.selectbox(label, options=options, index=index, key=key)
 
 
+# Config Plotly commune : désactive le zoom au scroll/pincement et le zoom au
+# double-clic/double-tap (demande de Flo, 16/08/2026 soir — "quand on clique
+# sur les graphes, ça zoome, ou bien quand on essaie de scroller sur mobile").
+# Combiné à dragmode=False dans _base_layout(), le glisser tactile à l'intérieur
+# du graphique ne capture plus le scroll de la page.
+_PLOTLY_CONFIG = {"scrollZoom": False, "doubleClick": False, "displayModeBar": False}
+
+
 def _base_layout(fig: go.Figure, y_title: str) -> go.Figure:
     fig.update_layout(
         template="plotly_white",
         margin=dict(l=10, r=10, t=30, b=10),
         font=dict(size=13),
         showlegend=False,
-        xaxis=dict(showgrid=False),
-        yaxis=dict(title=y_title, showgrid=True, gridcolor=GRID_COLOR, zeroline=False),
+        dragmode=False,
+        xaxis=dict(showgrid=False, fixedrange=True),
+        yaxis=dict(title=y_title, showgrid=True, gridcolor=GRID_COLOR, zeroline=False, fixedrange=True),
     )
     return fig
 
@@ -95,7 +104,7 @@ def _render_trend(
     _base_layout(fig, y_title)
     if y_range is not None:
         fig.update_yaxes(range=list(y_range))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=_PLOTLY_CONFIG)
 
 
 def render(ctx: dict) -> None:

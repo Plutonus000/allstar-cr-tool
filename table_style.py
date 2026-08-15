@@ -95,6 +95,37 @@ def highlight_player_row(styler, tag_col: str, own_tag: str):
     return styler.apply(_style_row, axis=1)
 
 
+
+# Colonnes "texte long" qu'on ne veut PAS resserrer (noms, commentaires...) —
+# tout le reste (rangs, tags, chiffres, %) est resserré par défaut. Utilisé par
+# mobile_column_config() ci-dessous.
+_WIDE_TEXT_COLUMNS = {
+    "Joueur", "Clan", "Nom", "Identifiant", "Raison révocation", "Commentaire",
+    "Motif", "Carte la plus faible",
+}
+
+
+def mobile_column_config(columns: list[str], wide_cols: set[str] | None = None) -> dict:
+    """
+    Config de colonnes resserrées pour st.dataframe (demande de Flo,
+    16/08/2026 soir : "sur mobile, il faudrait resserrer les colonnes dans les
+    tableaux"). Toutes les colonnes passent en largeur "small" SAUF celles de
+    `wide_cols` (par défaut `_WIDE_TEXT_COLUMNS` : les colonnes texte type nom
+    de joueur, qu'on ne veut pas tronquer).
+
+    ⚠️ Ne couvre PAS le centrage du contenu des cellules — st.dataframe (rendu
+    via un composant "glide-data-grid" en interne depuis les versions récentes
+    de Streamlit) ne supporte pas encore l'alignement du texte, ni via
+    column_config ni via le Styler pandas (demande de fonctionnalité encore
+    ouverte côté Streamlit à ce jour). Rien à faire de notre côté pour ce
+    point précis tant que Streamlit ne l'ajoute pas.
+    """
+    import streamlit as st
+
+    wide = wide_cols if wide_cols is not None else _WIDE_TEXT_COLUMNS
+    return {c: st.column_config.Column(width="small") for c in columns if c not in wide}
+
+
 def paired_decks_color_row(row, decks_col: str, diff_col: str) -> list[str]:
     """Couleur partagée pour une paire (decks joués, différence) d'une même
     ligne : rouge si 0 deck joué, vert si différence nulle (complet), jaune

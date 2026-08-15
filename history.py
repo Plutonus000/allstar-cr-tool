@@ -109,17 +109,32 @@ def _season_year(created_date: str) -> int | None:
 
 def _rebuild_item_from_archive(season_id: str, section_index, clan_tag: str, participants: list[dict]) -> dict:
     """Reconstruit un item façon race_log (standings/participants) depuis les lignes
-    archivées d'UNE SEULE semaine (déjà regroupées par (season_id, section_index))."""
-    parts = [
-        {
-            "tag": r.get("player_tag", ""),
-            "name": r.get("player_name", ""),
-            "decksUsed": int(r.get("decks_used") or 0),
-            "fame": int(r.get("fame") or 0),
-            "boatAttacks": int(r.get("boat_attacks") or 0),
-        }
-        for r in participants
-    ]
+    archivées d'UNE SEULE semaine (déjà regroupées par (season_id, section_index)).
+
+    Déduplique par tag joueur (garde la ligne avec le plus de decks joués) —
+    corrige un bug signalé par Flo le 16/08/2026 : 2 pics à >100 000 trophées
+    sur le graphique "Trophées du clan" de Statistiques. Cause probable : une
+    même semaine archivée deux fois (ex. deux sessions Streamlit concurrentes
+    ayant toutes les deux vu la semaine comme "pas encore archivée" avant que
+    l'une des deux n'écrive — voir history.sync_archive/storage.get_archived_week_keys),
+    ce qui doublait les lignes participant pour cette semaine et donc la somme
+    des `fame` calculée juste en dessous. Même pattern défensif que la
+    déduplication déjà appliquée à logic.compute_current_race_table() pour le
+    bug "83 joueurs"."""
+    by_tag: dict[str, dict] = {}
+    for r in participants:
+        tag = r.get("player_tag", "")
+        decks_used = int(r.get("decks_used") or 0)
+        existing = by_tag.get(tag)
+        if existing is None or decks_used > existing["decksUsed"]:
+            by_tag[tag] = {
+                "tag": tag,
+                "name": r.get("player_name", ""),
+                "decksUsed": decks_used,
+                "fame": int(r.get("fame") or 0),
+                "boatAttacks": int(r.get("boat_attacks") or 0),
+            }
+    parts = list(by_tag.values())
     return {
         "seasonId": season_id,
         "sectionIndex": section_index,

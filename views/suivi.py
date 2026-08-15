@@ -169,7 +169,8 @@ def _render_rapport_tab(ctx: dict) -> None:
                 )
                 styler = ts.format_int_columns(styler, int_cols)
                 st.dataframe(
-                    styler, hide_index=True, use_container_width=True, height=_table_height(len(missing))
+                    styler, hide_index=True, use_container_width=True, height=_table_height(len(missing)),
+                    column_config=ts.mobile_column_config(cols),
                 )
 
         with col_boats:
@@ -191,7 +192,8 @@ def _render_rapport_tab(ctx: dict) -> None:
                 )
                 styler = ts.format_int_columns(styler, int_cols)
                 st.dataframe(
-                    styler, hide_index=True, use_container_width=True, height=_table_height(len(boats))
+                    styler, hide_index=True, use_container_width=True, height=_table_height(len(boats)),
+                    column_config=ts.mobile_column_config(cols),
                 )
     except api.ClashAPIError as exc:
         st.error(str(exc))
@@ -291,7 +293,10 @@ def _render_promotions_tab(ctx: dict) -> None:
                     for p in promotable
                 ]
             ).sort_values("Série (semaines à 100%)", ascending=False)
-            st.dataframe(df, hide_index=True, use_container_width=False, height=_table_height(len(df)))
+            st.dataframe(
+                df, hide_index=True, use_container_width=False, height=_table_height(len(df)),
+                column_config=ts.mobile_column_config(list(df.columns)),
+            )
     except api.ClashAPIError as exc:
         st.error(str(exc))
 

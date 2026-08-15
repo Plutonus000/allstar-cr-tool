@@ -8,6 +8,7 @@ Données : API officielle Supercell, via le proxy RoyaleAPI (voir clash_api.py).
 from __future__ import annotations
 
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_option_menu import option_menu
 
 import auth
@@ -163,6 +164,32 @@ with st.sidebar:
             },
         },
     )
+
+    # Ferme automatiquement le menu (sidebar) sur mobile après avoir choisi un
+    # onglet — demande de Flo, 16/08/2026 soir ("il faudrait que le menu se
+    # ferme"). Best-effort : cible le bouton de repli natif de Streamlit via
+    # son attribut `kind="headerNoPadding"` (sélecteur documenté par la
+    # communauté Streamlit pour ce cas précis, non garanti à 100% selon la
+    # version — si Streamlit change sa structure interne, ce bloc devient
+    # simplement un no-op silencieux plutôt qu'une erreur visible). Ne se
+    # déclenche que sur écran étroit (<= 768px, seuil mobile classique) et
+    # seulement quand la page sélectionnée VIENT de changer (pas à chaque
+    # rerun, sinon le menu se refermerait aussi sur desktop à chaque interaction).
+    if st.session_state.get("_prev_selected_page") not in (None, selected_display):
+        components.html(
+            """
+            <script>
+            try {
+                if (window.parent.innerWidth <= 768) {
+                    var btn = window.parent.document.querySelector('.stSidebar button[kind="headerNoPadding"]');
+                    if (btn) { btn.click(); }
+                }
+            } catch (e) {}
+            </script>
+            """,
+            height=0,
+        )
+    st.session_state["_prev_selected_page"] = selected_display
 
     st.markdown("---")
     st.caption("Données via l'API officielle Supercell (proxy RoyaleAPI).")

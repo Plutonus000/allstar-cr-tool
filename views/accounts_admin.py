@@ -11,6 +11,7 @@ import streamlit as st
 
 import fmt
 import storage
+import table_style as ts
 
 
 def render(ctx: dict) -> None:
@@ -38,7 +39,12 @@ def render(ctx: dict) -> None:
 
     only_active = st.checkbox("N'afficher que les comptes actifs", value=True)
     view = df[df["Statut"] == "active"] if only_active else df
-    st.dataframe(view, use_container_width=True, hide_index=True)
+    # Colonnes resserrées sur mobile (demande de Flo, 16/08/2026 soir) — voir
+    # table_style.mobile_column_config().
+    st.dataframe(
+        view, use_container_width=True, hide_index=True,
+        column_config=ts.mobile_column_config(list(view.columns)),
+    )
 
     st.markdown("---")
     st.markdown("**Gérer le statut admin**")
