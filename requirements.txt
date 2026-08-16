@@ -1,9 +1,0 @@
-streamlit>=1.35
-requests>=2.31
-python-dotenv>=1.0
-pandas>=2.0
-bcrypt>=4.1
-plotly>=5.20
-gspread>=6.1
-google-auth>=2.30
-streamlit-option-menu>=0.3.12
