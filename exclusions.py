@@ -173,9 +173,13 @@ def build_tiers(stats: dict) -> dict:
         else:
             multi.append(s)
 
-    main.sort(key=lambda s: s["ranking_score"], reverse=True)
-    shield.sort(key=lambda s: s["ranking_score"], reverse=True)
-    multi.sort(key=lambda s: s["gdc_count"] * 10000 + s["ranking_score"], reverse=True)
+    # Tri par moyenne de trophées (avg_fame) sur la fenêtre de GDC jouées
+    # (≤10, voir compute_player_stats) — demande de Flo, 16/08/2026 soir :
+    # "le classement doit être classé en fonction de la moyenne de trophées
+    # sur les 10 dernières GDC (ou moins, si le joueur n'a pas 10)".
+    main.sort(key=lambda s: s["avg_fame"], reverse=True)
+    shield.sort(key=lambda s: s["avg_fame"], reverse=True)
+    multi.sort(key=lambda s: s["gdc_count"] * 10000 + s["avg_fame"], reverse=True)
 
     tiers: dict[str, list[dict]] = {}
     idx = 0
@@ -206,7 +210,8 @@ def ranked_list(stats: dict) -> list[dict]:
     la SEULE source de vérité pour le rang d'un joueur, utilisée à la fois par
     views/ranking.py (tableau) et views/profile.py ("Position au classement"),
     pour qu'ils ne puissent jamais afficher un rang différent pour la même
-    personne (le rang suit le même critère — ranking_score — que les sections).
+    personne (le rang suit le même critère — avg_fame, la moyenne de trophées —
+    que les sections).
     """
     tiers = build_tiers(stats)
     out = []

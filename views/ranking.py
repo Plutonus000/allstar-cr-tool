@@ -196,7 +196,7 @@ def render(ctx: dict) -> None:
                 st.info("Aucune donnée d'historique GDC trouvée pour ce clan.")
             else:
                 # Rang + palier calculés en UNE seule fois par exclusions.ranked_list()
-                # (même critère — ranking_score — que les sections ci-dessous, donc le
+                # (même critère — avg_fame, la moyenne de trophées — que les sections ci-dessous, donc le
                 # numéro de rang affiché est toujours cohérent avec la section du joueur).
                 ranked = exclusions.ranked_list(stats)
 
