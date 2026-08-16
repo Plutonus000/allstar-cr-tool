@@ -302,7 +302,7 @@ def _all_players_weeks(full_history: list[dict], clan_tag: str) -> dict[str, lis
     return per_player
 
 
-def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure: int) -> tuple[str, str, bool]:
+def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure: int) -> tuple[str, str, bool, int | None]:
     """
     Statut d'UNE semaine — voir _compute_weekly_statuses().
 
@@ -327,29 +327,33 @@ def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure
     (quelle semaine était la toute première), pas une question de sévérité
     qui doit s'assouplir avec le temps.
 
-    Renvoie (status, motif, manual) — status parmi :
-    'exempt' / 'ok' / 'grace' / 'warning' / 'excl_direct'.
+    Renvoie (status, motif, manual, rule) — status parmi :
+    'exempt' / 'ok' / 'grace' / 'warning' / 'excl_direct'. `rule` = numéro de
+    la règle responsable (2/3/4/7), ou None pour 'exempt'/'ok' — utilisé par
+    format_week_line() ci-dessous pour un affichage compact sans reparser le
+    texte libre de `motif` (demande de Flo, 16/08/2026 : format condensé
+    "GDC #X - Y/16 decks joués (Règle N)" dans le rapport d'exclusion).
     """
     if week["is_join_week"]:
-        return "exempt", "1ère GDC du joueur dans le clan — toujours exemptée (Règle 1).", False
+        return "exempt", "1ère GDC du joueur dans le clan — toujours exemptée (Règle 1).", False, 1
 
     decks = week["decks"]
     boats = week["boats"]
     complete = decks >= FULL_DECKS
 
     if boats > 0:
-        base, motif = "excl_direct", f"{boats} attaque(s) de bateau adverse (Règle 7)"
+        base, motif, rule = "excl_direct", f"{boats} attaque(s) de bateau adverse (Règle 7)", 7
     elif complete:
-        base, motif = "ok", ""
+        base, motif, rule = "ok", "", None
     elif current_tenure <= TENURE_DIRECT_MAX:
-        base, motif = "excl_direct", (
+        base, motif, rule = "excl_direct", (
             f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle "
             f"(≤{TENURE_DIRECT_MAX} — Règle 2)"
-        )
+        ), 2
     elif current_tenure < NB_GDC:
-        base, motif = "warning", (
+        base, motif, rule = "warning", (
             f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle (Règle 3)"
-        )
+        ), 3
     else:
         # Règle 4 : parmi les semaines de la fenêtre relevant elles aussi de la
         # Règle 4 (incomplètes, sans bateau, hors semaine d'arrivée — les
@@ -367,14 +371,32 @@ def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure
             if not w["is_join_week"] and w["boats"] == 0 and w["decks"] < FULL_DECKS
         ]
         if candidates and candidates[0]["week_key"] == week["week_key"]:
-            base, motif = "grace", f"{decks}/{FULL_DECKS} decks joués — 1ère GDC incomplète de la fenêtre (Règle 4)"
+            base, motif, rule = "grace", f"{decks}/{FULL_DECKS} decks joués — 1ère GDC incomplète de la fenêtre (Règle 4)", 4
         else:
-            base, motif = "warning", f"{decks}/{FULL_DECKS} decks joués — GDC incomplète supplémentaire (Règle 4)"
+            base, motif, rule = "warning", f"{decks}/{FULL_DECKS} decks joués — GDC incomplète supplémentaire (Règle 4)", 4
 
     if is_manual and base in ("excl_direct", "warning"):
-        return "grace", f"Grâce manuelle accordée par un chef (motif initial : {motif})", True
+        return "grace", f"Grâce manuelle accordée par un chef (motif initial : {motif})", True, rule
 
-    return base, motif, False
+    return base, motif, False, rule
+
+
+def format_week_line(week: dict) -> str:
+    """
+    Ligne compacte pour une semaine d'infraction — "GDC #X - Y/16 decks
+    joués (Règle N)" (ou "GDC #X - N attaque(s) de bateau adverse (Règle 7)")
+    — remplace l'ancien format verbeux "GDC #X (date) : <motif complet>"
+    dans le rapport d'exclusion (demande de Flo, 16/08/2026 : "plus compact,
+    plus lisible"). `week` doit avoir été enrichie par _compute_weekly_statuses()
+    (champ "rule"). Repli sur le motif complet si `rule` est absent (ne
+    devrait pas arriver pour une semaine excl_direct/warning/grace)."""
+    gdc = f"GDC #{week['seasonId']}"
+    rule = week.get("rule")
+    if rule == 7:
+        return f"{gdc} - {week['boats']} attaque(s) de bateau adverse (Règle {rule})"
+    if rule is not None:
+        return f"{gdc} - {week['decks']}/{FULL_DECKS} decks joués (Règle {rule})"
+    return f"{gdc} - {week.get('motif', '')}"
 
 
 def _compute_weekly_statuses(weeks: list[dict], manual_seasons: set[str]) -> list[dict]:
@@ -390,8 +412,8 @@ def _compute_weekly_statuses(weeks: list[dict], manual_seasons: set[str]) -> lis
     for idx, week in enumerate(weeks):
         window = weeks[max(0, idx - NB_GDC + 1) : idx + 1]
         is_manual = str(week["seasonId"]) in manual_seasons
-        status, motif, manual = _week_status(week, window, is_manual, current_tenure)
-        out.append({**week, "status": status, "motif": motif, "manual": manual})
+        status, motif, manual, rule = _week_status(week, window, is_manual, current_tenure)
+        out.append({**week, "status": status, "motif": motif, "manual": manual, "rule": rule})
     return out
 
 

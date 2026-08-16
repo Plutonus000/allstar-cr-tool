@@ -239,38 +239,46 @@ def _render_exclusions_tab(ctx: dict) -> None:
         st.markdown(f"🔴 **Exclusions recommandées ({len(excl)})**")
         for tag, s in sorted(excl.items(), key=lambda kv: kv[1]["name"].lower()):
             with st.container(border=True):
-                st.markdown(f"**{s['name']}** ({s['tag']})")
-                st.caption(s.get("reason_excl") or "Infraction détectée.")
-                # Détail semaine par semaine des attaques de bateau (Règle 7,
-                # cause directe de l'exclusion) — demande de Flo, 16/08/2026 :
-                # avant, seul le résumé "X attaque(s) de bateau..." apparaissait
-                # sans dire de quelle(s) GDC il s'agissait.
+                st.markdown(f"**{s['name']}** ({s['tag']}) — {s['tenure']} semaine(s) d'ancienneté")
+                # Format compact "GDC #X - Y/16 decks joués (Règle N)" au lieu
+                # de la phrase complète du motif — demande de Flo, 16/08/2026
+                # ("plus compact, plus lisible"). Un SEUL affichage par semaine
+                # désormais (avant : le résumé `reason_excl` listait déjà ces
+                # mêmes semaines, PUIS cette boucle les relistait une 2e fois
+                # avec les dates -> vrai doublon visible dans le rapport,
+                # signalé par Flo via capture d'écran).
                 for w in s["excl_weeks"]:
-                    st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
-                # Détail des avertissements quand l'exclusion vient du cumul
-                # ({WARN_TO_EXCL_THRESHOLD} avertissements actifs) plutôt que
-                # d'une exclusion directe — même demande de Flo : le résumé
-                # "3 avertissement(s) actifs sur les 10 dernières GDC" ne disait
-                # pas de quoi il s'agissait. Dans un expander pour garder les
-                # cartes compactes par défaut (surtout avec 3 colonnes).
-                if s["warning_count"] >= exclusions.WARN_TO_EXCL_THRESHOLD and s["warning_weeks"]:
-                    with st.expander(f"Détail des {s['warning_count']} avertissement(s)"):
-                        for w in s["warning_weeks"]:
-                            st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
-                        if s.get("converted_from_grace"):
-                            st.caption(
-                                f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion "
-                                "de grâces (Règle 5)."
-                            )
+                    st.caption(exclusions.format_week_line(w))
+                # Cas où l'exclusion vient du cumul ({WARN_TO_EXCL_THRESHOLD}
+                # avertissements actifs) plutôt que d'une exclusion directe :
+                # une phrase de résumé toujours visible + le détail dans un
+                # expander (cartes compactes par défaut, surtout à 3 colonnes).
+                if s["warning_count"] >= exclusions.WARN_TO_EXCL_THRESHOLD:
+                    st.caption(
+                        f"Cumul de {s['warning_count']} avertissement(s) actif(s) sur les "
+                        f"{exclusions.NB_GDC} dernières GDC."
+                    )
+                    if s["warning_weeks"]:
+                        with st.expander(f"Détail des {s['warning_count']} avertissement(s)"):
+                            for w in s["warning_weeks"]:
+                                st.caption(exclusions.format_week_line(w))
+                            if s.get("converted_from_grace"):
+                                st.caption(
+                                    f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion "
+                                    "de grâces (Règle 5)."
+                                )
                 _grace_widget(tag, s["name"], latest_season, ctx["username"], "excl")
 
     with col_warn:
         st.markdown(f"⚠️ **Avertissements ({len(warn)})**")
         for tag, s in sorted(warn.items(), key=lambda kv: kv[1]["name"].lower()):
             with st.container(border=True):
-                st.markdown(f"**{s['name']}** ({s['tag']}) — {s['warning_count']} avertissement(s) actif(s)")
+                st.markdown(
+                    f"**{s['name']}** ({s['tag']}) — {s['warning_count']} avertissement(s) actif(s), "
+                    f"{s['tenure']} semaine(s) d'ancienneté"
+                )
                 for w in s["warning_weeks"]:
-                    st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
+                    st.caption(exclusions.format_week_line(w))
                 if s.get("converted_from_grace"):
                     st.caption(f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion de grâces (Règle 5).")
                 _grace_widget(tag, s["name"], latest_season, ctx["username"], "warn")
@@ -279,10 +287,13 @@ def _render_exclusions_tab(ctx: dict) -> None:
         st.markdown(f"✅ **Grâces ({len(grace)})**")
         for tag, s in sorted(grace.items(), key=lambda kv: kv[1]["name"].lower()):
             with st.container(border=True):
-                st.markdown(f"**{s['name']}** ({s['tag']}) — {s['grace_count']} grâce(s) active(s)")
+                st.markdown(
+                    f"**{s['name']}** ({s['tag']}) — {s['grace_count']} grâce(s) active(s), "
+                    f"{s['tenure']} semaine(s) d'ancienneté"
+                )
                 for w in s["grace_weeks"]:
                     origin = "manuelle" if w["manual"] else "automatique"
-                    st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : grâce {origin} — {w['motif']}")
+                    st.caption(f"{exclusions.format_week_line(w)} — grâce {origin}")
 
     if manual_graces_raw:
         with st.expander(f"🕊️ Historique des grâces manuelles ({len(manual_graces_raw)})"):

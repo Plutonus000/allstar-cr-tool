@@ -189,15 +189,18 @@ def _render_warnings_graces_section(
     col_warn, col_grace = st.columns(2)
     with col_warn:
         st.metric("Avertissements actifs", report["warning_count"])
+        # Format compact "GDC #X - Y/16 decks joués (Règle N)" — même format
+        # que le rapport d'exclusion chefs (voir views/suivi.py), demande de
+        # Flo, 16/08/2026 ("plus compact, plus lisible").
         for w in report["warning_weeks"]:
-            st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
+            st.caption(exclusions.format_week_line(w))
         if report.get("converted_from_grace"):
             st.caption(f"+ {report['converted_from_grace']} issu(s) de la conversion de grâces (3 grâces = 1 avertissement).")
     with col_grace:
         st.metric("Grâces actives", report["grace_count"])
         for w in report["grace_weeks"]:
             origin = "manuelle" if w["manual"] else "automatique"
-            st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : grâce {origin} — {w['motif']}")
+            st.caption(f"{exclusions.format_week_line(w)} — grâce {origin}")
             if w["manual"]:
                 match = next(
                     (
