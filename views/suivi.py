@@ -102,9 +102,56 @@ def _dual_window_table(stats_last: dict, stats_10: dict, current_tags: set[str] 
     return pd.DataFrame(rows)
 
 
-def _grace_widget(tag: str, name: str, season_id: str, granted_by: str, key_prefix: str) -> None:
-    """Bouton + commentaire optionnel pour accorder une grâce manuelle à un joueur."""
+def _grace_options(weeks: list[dict]) -> list[tuple[str, str]]:
+    """Regroupe des semaines d'infraction (excl_weeks/warning_weeks d'un
+    joueur) par saison (season_id) — la grâce manuelle s'accorde au niveau
+    de la saison entière (voir storage.add_manual_grace / exclusions.py qui
+    matche par `week["seasonId"]`, pas par semaine individuelle à l'intérieur
+    d'une saison à plusieurs semaines). Renvoie [(season_id, libellé), ...],
+    dans l'ordre de `weeks` (le plus récent en premier)."""
+    grouped: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for w in weeks:
+        sid = str(w["seasonId"])
+        if sid not in grouped:
+            grouped[sid] = []
+            order.append(sid)
+        grouped[sid].append(w)
+    options = []
+    for sid in order:
+        ws = grouped[sid]
+        label = exclusions.format_week_line(ws[0]) if len(ws) == 1 else f"GDC #{sid} — {len(ws)} semaine(s) concernée(s)"
+        options.append((sid, label))
+    return options
+
+
+def _grace_widget(tag: str, name: str, weeks: list[dict], granted_by: str, key_prefix: str) -> None:
+    """Bouton + commentaire optionnel pour accorder une grâce manuelle à un
+    joueur, CIBLÉE sur la GDC réellement responsable de l'exclusion/avertissement.
+
+    `weeks` = les semaines d'infraction candidates du joueur (excl_weeks et/ou
+    warning_weeks) — corrige un bug réel signalé par Flo (16/08/2026) : le
+    bouton graciait toujours la saison la PLUS RÉCENTE du CLAN entier
+    (`latest_season`, la même pour tout le monde), peu importe quelle GDC
+    avait réellement causé l'exclusion DE CE joueur. Si son infraction datait
+    d'une saison plus ancienne que la dernière GDC du clan, la grâce créée ne
+    correspondait à AUCUNE semaine réelle du joueur (`is_manual` ne matchait
+    jamais) et il restait exclu malgré la grâce accordée."""
+    options = _grace_options(weeks)
+    if not options:
+        return
     with st.expander(f"🕊️ Grâcier {name}"):
+        if len(options) > 1:
+            st.caption(
+                f"{name} a {len(options)} GDC distinctes en cause — choisis celle à gracier ci-dessous. "
+                "S'il y en a plusieurs, il faudra peut-être en gracier plus d'une pour que l'exclusion "
+                "disparaisse complètement."
+            )
+        options_by_sid = dict(options)
+        season_id = st.selectbox(
+            "GDC à gracier", options=[sid for sid, _ in options],
+            format_func=lambda sid: options_by_sid[sid], key=f"{key_prefix}_season_{tag}",
+        )
         comment = st.text_input(
             "Commentaire (optionnel, visible par les chefs et par le joueur)",
             key=f"{key_prefix}_comment_{tag}",
@@ -114,7 +161,7 @@ def _grace_widget(tag: str, name: str, season_id: str, granted_by: str, key_pref
                 player_tag=f"#{tag}", player_name=name, season_id=season_id,
                 comment=comment, granted_by=granted_by,
             )
-            st.success(f"{name} a été gracié pour cette GDC.")
+            st.success(f"{name} a été gracié pour la GDC #{season_id}.")
             st.rerun()
 
 
@@ -223,7 +270,6 @@ def _render_exclusions_tab(ctx: dict) -> None:
     manual_graces = exclusions.manual_grace_keys(manual_graces_raw)
     report = exclusions.build_exclusion_report(full_history, clan_tag, manual_graces, current_tags)
     excl, warn, grace = report["excl"], report["warn"], report["grace"]
-    latest_season = str(full_history[0].get("seasonId", ""))
 
     st.caption(
         "Calculé sur les 10 dernières GDC glissantes de chaque joueur (Règles 1 à 7 — "
@@ -267,7 +313,7 @@ def _render_exclusions_tab(ctx: dict) -> None:
                                     f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion "
                                     "de grâces (Règle 5)."
                                 )
-                _grace_widget(tag, s["name"], latest_season, ctx["username"], "excl")
+                _grace_widget(tag, s["name"], s["excl_weeks"] + s["warning_weeks"], ctx["username"], "excl")
 
     with col_warn:
         st.markdown(f"⚠️ **Avertissements ({len(warn)})**")
@@ -281,7 +327,7 @@ def _render_exclusions_tab(ctx: dict) -> None:
                     st.caption(exclusions.format_week_line(w))
                 if s.get("converted_from_grace"):
                     st.caption(f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion de grâces (Règle 5).")
-                _grace_widget(tag, s["name"], latest_season, ctx["username"], "warn")
+                _grace_widget(tag, s["name"], s["warning_weeks"], ctx["username"], "warn")
 
     with col_grace:
         st.markdown(f"✅ **Grâces ({len(grace)})**")
