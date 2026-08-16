@@ -169,11 +169,16 @@ def render(ctx: dict) -> None:
 
             current_tags = _current_member_tags(clan_tag)
 
+            # Historique complet (archive + live) désormais chargé pour TOUT le
+            # monde (pas seulement les chefs) — nécessaire pour la colonne
+            # "Progression" ci-dessous (comparaison au rang de la semaine
+            # précédente), en plus de servir déjà au bouton Discord (chefs).
+            full_history = gdc_history.get_full_history(clan_tag, race_log)
+
             # Recherche + bouton Discord en haut, côte à côte et proches l'un de
             # l'autre (demande de Flo, 15/08/2026 soir — le 1er placement mettait
             # le bouton trop loin sur la droite) — avant même le tableau.
             if ctx.get("is_chef"):
-                full_history = gdc_history.get_full_history(clan_tag, race_log)
                 col_search, col_discord, _col_spacer = st.columns([1, 1, 2], gap="small")
                 with col_search:
                     name_filter = st.text_input("Filtrer par nom", key="filter_ranking")
@@ -194,10 +199,30 @@ def render(ctx: dict) -> None:
                 # (même critère — ranking_score — que les sections ci-dessous, donc le
                 # numéro de rang affiché est toujours cohérent avec la section du joueur).
                 ranked = exclusions.ranked_list(stats)
+
+                # Colonne "Progression" (demande de Flo, 16/08/2026 soir) :
+                # rang de la semaine précédente recalculé sur la même fenêtre
+                # de `n_races` GDC, mais DÉCALÉE d'une semaine (on exclut la
+                # plus récente et on prend celle d'avant) — même principe que
+                # le post Discord (voir _render_discord_post_section /
+                # discord_post.build_ranking_messages, qui fait exactement le
+                # même calcul avec POST_N_RACES à la place de `n_races`). On
+                # utilise `full_history` (archive + live) plutôt que `race_log`
+                # (limité à ce que renvoie l'API en direct) pour ne pas être
+                # bloqué dès que `n_races` dépasse ce que l'API garde encore.
+                prev_rank_by_tag: dict[str, int] = {}
+                if len(full_history) >= n_races + 1:
+                    prev_stats = exclusions.compute_player_stats(full_history[1 : 1 + n_races], clan_tag)
+                    if current_tags is not None:
+                        prev_stats = {tag: s for tag, s in prev_stats.items() if tag in current_tags}
+                    if prev_stats:
+                        prev_rank_by_tag = {p["tag"]: p["rang"] for p in exclusions.ranked_list(prev_stats)}
+
                 full_df = pd.DataFrame(
                     [
                         {
                             "Rang": p["rang"],
+                            "Progression": ts.progression_value(p["rang"], prev_rank_by_tag.get(p["tag"])),
                             "Palier": p["tier"],
                             "Joueur": p["name"],
                             "Tag": f"#{p['tag']}",
@@ -219,9 +244,14 @@ def render(ctx: dict) -> None:
                 )
 
                 st.caption(f"{len(filtered)} joueur(s) affiché(s) sur {len(full_df)} — {len(race_log)} GDC disponibles via l'API.")
+                if not prev_rank_by_tag:
+                    st.caption(
+                        "ℹ️ Historique insuffisant pour calculer la progression par rapport à la semaine "
+                        "précédente (🆕 partout) — elle apparaîtra dès qu'assez de GDC seront archivées."
+                    )
 
                 cols_to_show = [
-                    "Rang", "Joueur", "Tag", "GDC jouées", "Decks joués",
+                    "Rang", "Progression", "Joueur", "Tag", "GDC jouées", "Decks joués",
                     "Decks max", "Assiduité %", "Trophées totaux", "Trophées moy./GDC",
                 ]
                 shown_any = False
@@ -232,8 +262,11 @@ def render(ctx: dict) -> None:
                     shown_any = True
                     st.markdown(f"**{tier_name}** ({len(section)})")
                     st.caption(exclusions.TIER_DESCRIPTIONS.get(tier_name, ""))
-                    # Ligne du joueur connecté mise en valeur (demande de Flo, 16/08/2026).
+                    # Ligne du joueur connecté mise en valeur (demande de Flo, 16/08/2026)
+                    # + couleur vert/rouge/jaune sur la colonne "Progression" (même demande,
+                    # même soir : flèche verte = progression, rouge = recul, jaune = stable).
                     styler = ts.highlight_player_row(section[cols_to_show].style, "Tag", ctx.get("player_tag", ""))
+                    styler = ts.style_map(styler, ts.progression_color, subset=["Progression"])
                     st.dataframe(
                         styler,
                         hide_index=True,

@@ -61,6 +61,41 @@ def boat_attacks_color(value) -> str:
     return RED if v > 0 else GREEN
 
 
+PROGRESSION_UP = "🟢"
+PROGRESSION_DOWN = "🔴"
+PROGRESSION_SAME = "🟡"
+PROGRESSION_NEW = "🆕"
+
+
+def progression_value(rank: int, prev_rank: int | None) -> str:
+    """Texte de la colonne "Progression" du Classement (demande de Flo,
+    16/08/2026) : flèche + nombre de places gagnées/perdues par rapport à la
+    semaine précédente. `prev_rank`=None (joueur absent du classement de la
+    semaine précédente, ex. nouvel arrivant) -> \"🆕\" plutôt qu'une flèche."""
+    if prev_rank is None:
+        return PROGRESSION_NEW
+    diff = prev_rank - rank  # positif = rang plus petit = progression
+    if diff > 0:
+        return f"{PROGRESSION_UP} ▲ +{diff}"
+    if diff < 0:
+        return f"{PROGRESSION_DOWN} ▼ {diff}"  # diff déjà négatif -> "-2"
+    return f"{PROGRESSION_SAME} —"
+
+
+def progression_color(value) -> str:
+    """Couleur de fond associée à progression_value() ci-dessus — vert si
+    progression, rouge si recul, jaune si position inchangée, pas de couleur
+    pour un nouvel arrivant (🆕, rien à comparer)."""
+    text = str(value or "")
+    if text.startswith(PROGRESSION_UP):
+        return GREEN
+    if text.startswith(PROGRESSION_DOWN):
+        return RED
+    if text.startswith(PROGRESSION_SAME):
+        return YELLOW
+    return ""
+
+
 def format_int_columns(styler, columns: list[str], na_rep: str = "—"):
     """Force l'affichage de colonnes numériques en entiers (0 décimale),
     avec `na_rep` pour les valeurs manquantes. Corrige l'affichage type

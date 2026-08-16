@@ -241,6 +241,27 @@ def _render_exclusions_tab(ctx: dict) -> None:
             with st.container(border=True):
                 st.markdown(f"**{s['name']}** ({s['tag']})")
                 st.caption(s.get("reason_excl") or "Infraction détectée.")
+                # Détail semaine par semaine des attaques de bateau (Règle 7,
+                # cause directe de l'exclusion) — demande de Flo, 16/08/2026 :
+                # avant, seul le résumé "X attaque(s) de bateau..." apparaissait
+                # sans dire de quelle(s) GDC il s'agissait.
+                for w in s["excl_weeks"]:
+                    st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
+                # Détail des avertissements quand l'exclusion vient du cumul
+                # ({WARN_TO_EXCL_THRESHOLD} avertissements actifs) plutôt que
+                # d'une exclusion directe — même demande de Flo : le résumé
+                # "3 avertissement(s) actifs sur les 10 dernières GDC" ne disait
+                # pas de quoi il s'agissait. Dans un expander pour garder les
+                # cartes compactes par défaut (surtout avec 3 colonnes).
+                if s["warning_count"] >= exclusions.WARN_TO_EXCL_THRESHOLD and s["warning_weeks"]:
+                    with st.expander(f"Détail des {s['warning_count']} avertissement(s)"):
+                        for w in s["warning_weeks"]:
+                            st.caption(f"GDC #{w['seasonId']} ({fmt.format_date(w['createdDate'])}) : {w['motif']}")
+                        if s.get("converted_from_grace"):
+                            st.caption(
+                                f"+ {s['converted_from_grace']} avertissement(s) issu(s) de la conversion "
+                                "de grâces (Règle 5)."
+                            )
                 _grace_widget(tag, s["name"], latest_season, ctx["username"], "excl")
 
     with col_warn:
