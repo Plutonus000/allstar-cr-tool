@@ -2,9 +2,10 @@
 exclusions.py — moteur de détection des exclusions/avertissements/grâces et
 des tiers "Avengers".
 
-Règles de détection (redéfinies avec Flo le 15/08/2026 soir, remplacent
-entièrement l'ancienne logique portée du bot Discord — voir git history si
-besoin de retrouver l'ancienne version) :
+Règles de détection (2e refonte avec Flo le 18/08/2026 soir — la 1ère refonte
+du même jour, à base de "GDC précédente complète ou non", est remplacée par
+un système à 2 régimes ci-dessous ; voir git history si besoin de retrouver
+une version antérieure) :
 
 - Règle 1 : la toute première GDC visible d'un joueur dans le clan (semaine
   d'arrivée) n'est JAMAIS prise en compte, quel que soit son contenu — ni
@@ -13,31 +14,53 @@ besoin de retrouver l'ancienne version) :
   l'historique passé (pas de détail jour par jour), donc on ne peut pas
   distinguer "avant l'arrivée" de "après l'arrivée" à l'intérieur de cette
   1ère semaine — on l'exempte donc entièrement plutôt que de pénaliser à tort.
-- Règle 2 : joueur avec 5 GDC ou moins d'ancienneté dans le clan (ancienneté
-  = nombre total de GDC où le joueur apparaît dans l'historique, la semaine
-  d'arrivée comptant comme 1) → doit jouer tous ses decks. Un manquement =
-  exclusion directe (pas de grâce, pas d'avertissement).
-- Règle 3 : ancienneté entre 6 et 10 GDC → chaque GDC incomplète (dans la
-  fenêtre des 10 dernières GDC glissantes) = 1 avertissement.
-- Règle 4 : ancienneté strictement supérieure à 10 GDC → dans la fenêtre des
-  10 dernières GDC glissantes, la 1ère GDC incomplète = grâce automatique,
-  chaque GDC incomplète suivante = 1 avertissement.
-- Règle 5 : 3 grâces cumulées (sur la fenêtre glissante de 10 GDC) = 1
-  avertissement généré (par tranche complète de 3 — la grâce affichée reste
-  donc toujours entre 0 et 2).
-- Règle 6 : tout se calcule sur une fenêtre glissante de 10 GDC — un
+- Règle 2 (régime STRICT) : tant qu'un joueur n'a JAMAIS eu, à un moment de
+  son historique, GRADUATION_STREAK (5) GDC CONSÉCUTIVES complètes (tous les
+  decks joués, aucune attaque de bateau) depuis son arrivée, il reste dans le
+  régime strict : TOUTE GDC incomplète (hors semaine d'arrivée) = avertissement
+  direct, aucune grâce possible. Une ancienneté élevée ne suffit PAS à elle
+  seule à sortir de ce régime — seul un vrai streak de 5 GDC complètes
+  d'affilée le permet (demande explicite de Flo, 18/08/2026 : "un joueur qui a
+  15 GDC d'ancienneté mais jamais 5 GDC d'affilée ne fait toujours pas partie
+  du régime assoupli").
+- Règle 3 : toute attaque de bateau adverse pendant une GDC = avertissement
+  automatique, sauf en semaine d'arrivée (toujours exemptée par la Règle 1).
+  Une semaine "bateau" ne compte JAMAIS comme candidate à la grâce (Règle 4),
+  et casse le streak de GDC consécutives complètes (Règle 2) — seule une GDC
+  réellement complète (tous les decks joués ET aucune attaque de bateau) fait
+  progresser ce streak.
+- Règle 4 (régime ASSOUPLI) : une fois que le joueur a eu, À N'IMPORTE QUEL
+  MOMENT de son historique, GRADUATION_STREAK (5) GDC consécutives complètes,
+  il passe DÉFINITIVEMENT dans le régime assoupli — même s'il enchaîne ensuite
+  des manquements, il n'y retourne JAMAIS ("une fois qu'on passe en régime
+  assoupli on y reste pour toujours", Flo 18/08/2026). Dans ce régime : sur
+  une fenêtre glissante des NB_GDC (10) dernières GDC, la 1ère GDC incomplète
+  (hors bateau, hors arrivée) = grâce automatique, chaque GDC incomplète
+  suivante DANS LA MÊME FENÊTRE = avertissement — un joueur assoupli a donc
+  droit à 1 GDC incomplète tolérée toutes les 10 GDC. Seules les GDC déjà
+  survenues APRÈS le passage en régime assoupli comptent comme candidates à
+  cette grâce (une GDC incomplète d'avant la graduation, déjà avertissement
+  sous le régime strict, ne "consomme" pas la grâce disponible après coup).
+- Règle 5 : GRACE_TO_WARN_RATIO (3) grâces cumulées (sur la fenêtre glissante
+  de 10 GDC) = 1 avertissement généré (par tranche complète de 3 — la grâce
+  affichée reste donc toujours entre 0 et 2).
+- Règle 6 : tout se calcule sur une fenêtre glissante de NB_GDC (10) GDC — un
   événement (grâce/avertissement) sort naturellement du compte une fois que
   la GDC qui l'a généré a plus de 10 semaines. Chaque semaine ne compte
-  qu'une seule fois (pas de recomptage en glissant).
-- Règle 7 : toute attaque de bateau adverse dans la fenêtre des 10 dernières
-  GDC glissantes = exclusion directe.
-- 3 avertissements actifs (cumulés, jamais remis à zéro tant qu'ils sont
-  dans la fenêtre de 10 GDC) → le joueur PASSE dans la liste des exclusions
-  recommandées (et sort de la liste des avertissements) ; si le nombre
-  d'avertissements actifs redescend sous 3 (glissement de fenêtre), il
-  revient automatiquement dans les avertissements. Rien n'est mémorisé nulle
-  part : tout est recalculé à chaque affichage depuis l'historique archivé
-  (voir history.py) — pas de journal séparé qui pourrait diverger.
+  qu'une seule fois (pas de recomptage en glissant). Le passage en régime
+  assoupli (Règle 4), lui, regarde toujours la vraie chronologie complète du
+  joueur, même au-delà de cette fenêtre de 10 — un streak de 5 GDC complètes
+  vieux de plusieurs mois reste acquis pour toujours.
+- WARN_TO_EXCL_THRESHOLD (3) avertissements actifs (cumulés, jamais remis à
+  zéro tant qu'ils sont dans la fenêtre de 10 GDC) → le joueur PASSE dans la
+  liste des exclusions recommandées (et sort de la liste des avertissements) ;
+  si le nombre d'avertissements actifs redescend sous 3 (glissement de
+  fenêtre), il revient automatiquement dans les avertissements. Il n'y a donc
+  AUCUN cas d'exclusion recommandée directe au niveau d'une seule semaine —
+  c'est toujours cette accumulation d'avertissements qui y mène. Rien n'est
+  mémorisé nulle part : tout est recalculé à chaque affichage depuis
+  l'historique archivé (voir history.py) — pas de journal séparé qui
+  pourrait diverger.
 - Grâce manuelle (bouton "grâcier" d'un chef, voir storage.get_manual_graces) :
   transforme la semaine concernée en "grâce" (peu importe son statut de base),
   cette grâce participe ensuite normalement au comptage glissant (Règle 5).
@@ -49,8 +72,8 @@ exclu/parti ne doit plus apparaître.
 
 from __future__ import annotations
 
-NB_GDC = 10  # fenêtre glissante d'analyse (Règles 3/4/5/6/7)
-TENURE_DIRECT_MAX = 5  # ancienneté max pour la Règle 2 (exclusion directe)
+NB_GDC = 10  # fenêtre glissante d'analyse (Règles 4/5/6)
+GRADUATION_STREAK = 5  # Règle 2/4 : nb de GDC consécutives complètes pour passer en régime assoupli (à vie)
 GRACE_TO_WARN_RATIO = 3  # Règle 5 : 3 grâces glissantes -> 1 avertissement généré
 WARN_TO_EXCL_THRESHOLD = 3  # avertissements actifs -> le joueur passe en exclusion
 FULL_DECKS = 16
@@ -224,36 +247,45 @@ def ranked_list(stats: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Règles d'exclusion — Règles 1 à 7 (voir docstring du module)
+# Règles d'exclusion — Règles 1 à 5 (voir docstring du module)
 # ---------------------------------------------------------------------------
 
 
 def rules_summary_markdown() -> str:
     """
-    Résumé court (liste à puces) du règlement des exclusions (Règles 1 à 7 —
+    Résumé court (liste à puces) du règlement des exclusions (Règles 1 à 6 —
     voir docstring du module pour le détail complet), affiché aux joueurs sur
     "Mon profil" (à côté de "Points à surveiller") et aux chefs sur "Suivi
     clan" > "Exclusions" (tout en haut, avant les rapports) — demande de Flo,
     16/08/2026 soir. Généré à partir des constantes du module ci-dessus pour
     ne jamais diverger des vraies règles appliquées par le moteur.
+
+    2e refonte du 18/08/2026 (avec Flo) : système à 2 régimes — strict tant
+    que le joueur n'a jamais eu GRADUATION_STREAK GDC consécutives complètes,
+    puis assoupli (1 GDC incomplète tolérée par fenêtre de 10) une fois ce
+    streak atteint une fois, à vie ; les attaques de bateau adverse ne sont
+    plus une exclusion directe mais un avertissement.
     """
     return (
         "- **1ère GDC dans le clan** : toujours exemptée, quel que soit son contenu.\n"
-        f"- **Ancienneté actuelle ≤ {TENURE_DIRECT_MAX} GDC** : un deck manquant sur une GDC = "
-        "exclusion directe (pas de grâce, pas d'avertissement).\n"
-        f"- **Ancienneté actuelle entre {TENURE_DIRECT_MAX + 1} et {NB_GDC - 1} GDC** : chaque GDC "
-        f"incomplète (sur les {NB_GDC} dernières) = 1 avertissement.\n"
-        f"- **Ancienneté actuelle ≥ {NB_GDC} GDC** : sur les {NB_GDC} dernières GDC, la 1ère incomplète "
-        "= grâce automatique, chaque suivante = 1 avertissement.\n"
+        f"- **Tant que le joueur n'a jamais eu {GRADUATION_STREAK} GDC consécutives complètes** "
+        "(tous les decks joués, aucune attaque de bateau) depuis son arrivée : toute GDC incomplète "
+        "= avertissement direct, aucune grâce possible. Une ancienneté élevée ne suffit pas à elle "
+        f"seule à sortir de ce régime — il faut un vrai streak de {GRADUATION_STREAK} GDC complètes "
+        "d'affilée.\n"
+        f"- **Dès que le joueur a eu, une fois dans son historique, {GRADUATION_STREAK} GDC "
+        "consécutives complètes** : passage définitif (à vie, même en cas de manquements ensuite) à "
+        f"un régime assoupli où, sur une fenêtre glissante des {NB_GDC} dernières GDC, la 1ère GDC "
+        "incomplète = grâce automatique, chaque GDC incomplète suivante dans la même fenêtre = "
+        "avertissement.\n"
+        "- **Attaque de bateau adverse** : avertissement automatique (sauf en semaine d'arrivée).\n"
         f"- **{GRACE_TO_WARN_RATIO} grâces cumulées** (fenêtre glissante) = 1 avertissement supplémentaire généré.\n"
-        "- **Attaque de bateau adverse** = exclusion directe, quelle que soit l'ancienneté "
-        "(sauf en semaine d'arrivée).\n"
         f"- **{WARN_TO_EXCL_THRESHOLD} avertissements actifs** (sur les {NB_GDC} dernières GDC) = "
-        "recommandation d'exclusion.\n"
-        f"- Tout se calcule sur une fenêtre glissante des {NB_GDC} dernières GDC — un manquement ancien "
-        "sort automatiquement du compte au fil des semaines.\n"
-        "- L'ancienneté prise en compte est **toujours celle d'aujourd'hui**, pas celle que le joueur "
-        "avait à l'époque de chaque semaine passée."
+        "recommandation d'exclusion — c'est la SEULE façon d'être recommandé à l'exclusion, il n'y a "
+        "plus d'exclusion directe pour une seule GDC.\n"
+        f"- Le comptage des grâces/avertissements actifs se fait sur une fenêtre glissante des "
+        f"{NB_GDC} dernières GDC — un manquement ancien sort automatiquement du compte au fil des "
+        "semaines."
     )
 
 
@@ -307,97 +339,18 @@ def _all_players_weeks(full_history: list[dict], clan_tag: str) -> dict[str, lis
     return per_player
 
 
-def _week_status(week: dict, window: list[dict], is_manual: bool, current_tenure: int) -> tuple[str, str, bool, int | None]:
-    """
-    Statut d'UNE semaine — voir _compute_weekly_statuses().
-
-    `window` = les <=10 semaines du joueur se terminant à `week` INCLUSE
-    (dans l'ordre chronologique), utilisé uniquement pour la Règle 4.
-
-    `current_tenure` = ancienneté ACTUELLE du joueur (celle d'AUJOURD'HUI,
-    pas celle qu'il avait au moment de `week`) — demande explicite de Flo,
-    16/08/2026 soir : "je voudrais que l'ancienneté prise en compte soit
-    l'ancienneté ACTUELLE". Avant ce changement, chaque semaine était jugée
-    selon l'ancienneté du joueur À CETTE ÉPOQUE (`week["tenure"]`) — un
-    manquement commis quand le joueur était encore nouveau restait
-    définitivement marqué "Règle 2" (exclusion directe, sans grâce) même des
-    mois plus tard une fois le joueur devenu vétéran, tant que cette semaine
-    restait dans la fenêtre glissante de 10 GDC (Règle 6). Désormais, TOUTES
-    les semaines de la fenêtre sont rejugées avec l'ancienneté DU JOUR : un
-    vétéran (>=10 GDC aujourd'hui) voit ses vieux manquements traités par la
-    Règle 4 (grâce/avertissement), pas par la Règle 2/3, même s'ils dataient
-    d'une époque où il avait moins de GDC d'ancienneté. Seule la Règle 1
-    (semaine d'arrivée exemptée) reste basée sur l'ancienneté DE L'ÉPOQUE
-    (`week["is_join_week"]`, `week["tenure"] == 1`) — c'est un fait structurel
-    (quelle semaine était la toute première), pas une question de sévérité
-    qui doit s'assouplir avec le temps.
-
-    Renvoie (status, motif, manual, rule) — status parmi :
-    'exempt' / 'ok' / 'grace' / 'warning' / 'excl_direct'. `rule` = numéro de
-    la règle responsable (2/3/4/7), ou None pour 'exempt'/'ok' — utilisé par
-    format_week_line() ci-dessous pour un affichage compact sans reparser le
-    texte libre de `motif` (demande de Flo, 16/08/2026 : format condensé
-    "GDC #X - Y/16 decks joués (Règle N)" dans le rapport d'exclusion).
-    """
-    if week["is_join_week"]:
-        return "exempt", "1ère GDC du joueur dans le clan — toujours exemptée (Règle 1).", False, 1
-
-    decks = week["decks"]
-    boats = week["boats"]
-    complete = decks >= FULL_DECKS
-
-    if boats > 0:
-        base, motif, rule = "excl_direct", f"{boats} attaque(s) de bateau adverse (Règle 7)", 7
-    elif complete:
-        base, motif, rule = "ok", "", None
-    elif current_tenure <= TENURE_DIRECT_MAX:
-        base, motif, rule = "excl_direct", (
-            f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle "
-            f"(≤{TENURE_DIRECT_MAX} — Règle 2)"
-        ), 2
-    elif current_tenure < NB_GDC:
-        base, motif, rule = "warning", (
-            f"{decks}/{FULL_DECKS} decks joués, {current_tenure} GDC d'ancienneté actuelle (Règle 3)"
-        ), 3
-    else:
-        # Règle 4 : parmi les semaines de la fenêtre relevant elles aussi de la
-        # Règle 4 (incomplètes, sans bateau, hors semaine d'arrivée — les
-        # semaines "bateau" ont déjà leur propre statut indépendant, elles ne
-        # concourent pas pour la grâce), la 1ère chronologiquement = grâce,
-        # les suivantes = avertissement. Plus de filtre sur l'ancienneté ICI
-        # (`w["tenure"] >= NB_GDC`) : on est déjà dans la branche "Règle 4"
-        # parce que `current_tenure >= NB_GDC`, et cette ancienneté actuelle
-        # est désormais la même pour toutes les semaines du joueur — donc
-        # toute semaine incomplète/sans-bateau/hors-arrivée du joueur est un
-        # candidat valable, quelle que soit l'ancienneté qu'il avait CE
-        # jour-là.
-        candidates = [
-            w for w in window
-            if not w["is_join_week"] and w["boats"] == 0 and w["decks"] < FULL_DECKS
-        ]
-        if candidates and candidates[0]["week_key"] == week["week_key"]:
-            base, motif, rule = "grace", f"{decks}/{FULL_DECKS} decks joués — 1ère GDC incomplète de la fenêtre (Règle 4)", 4
-        else:
-            base, motif, rule = "warning", f"{decks}/{FULL_DECKS} decks joués — GDC incomplète supplémentaire (Règle 4)", 4
-
-    if is_manual and base in ("excl_direct", "warning"):
-        return "grace", f"Grâce manuelle accordée par un chef (motif initial : {motif})", True, rule
-
-    return base, motif, False, rule
-
-
 def format_week_line(week: dict) -> str:
     """
     Ligne compacte pour une semaine d'infraction — "GDC #X - Y/16 decks
-    joués (Règle N)" (ou "GDC #X - N attaque(s) de bateau adverse (Règle 7)")
+    joués (Règle N)" (ou "GDC #X - N attaque(s) de bateau adverse (Règle 3)")
     — remplace l'ancien format verbeux "GDC #X (date) : <motif complet>"
     dans le rapport d'exclusion (demande de Flo, 16/08/2026 : "plus compact,
     plus lisible"). `week` doit avoir été enrichie par _compute_weekly_statuses()
     (champ "rule"). Repli sur le motif complet si `rule` est absent (ne
-    devrait pas arriver pour une semaine excl_direct/warning/grace)."""
+    devrait pas arriver pour une semaine warning/grace)."""
     gdc = f"GDC #{week['seasonId']}"
     rule = week.get("rule")
-    if rule == 7:
+    if rule == 3:
         return f"{gdc} - {week['boats']} attaque(s) de bateau adverse (Règle {rule})"
     if rule is not None:
         return f"{gdc} - {week['decks']}/{FULL_DECKS} decks joués (Règle {rule})"
@@ -405,20 +358,89 @@ def format_week_line(week: dict) -> str:
 
 
 def _compute_weekly_statuses(weeks: list[dict], manual_seasons: set[str]) -> list[dict]:
-    """Enrichit chaque semaine (chronologique) d'un statut — voir _week_status().
-
-    `current_tenure` = ancienneté du joueur à sa semaine la PLUS RÉCENTE
-    (`weeks[-1]`) — c'est cette ancienneté "d'aujourd'hui" qui sert désormais
-    de référence pour TOUTES les semaines de la fenêtre glissante (voir le
-    docstring de _week_status pour le détail de ce changement, 16/08/2026).
     """
-    current_tenure = weeks[-1]["tenure"] if weeks else 0
+    Enrichit chaque semaine (chronologique) d'un statut, en UN SEUL passage
+    séquentiel sur TOUT l'historique du joueur (pas seulement les 10
+    dernières GDC affichées) — 2 régimes (refonte du 18/08/2026 avec Flo,
+    voir docstring du module) :
+
+    - Régime STRICT (par défaut, tant que le joueur n'a jamais eu
+      GRADUATION_STREAK GDC consécutives complètes) : toute GDC incomplète
+      hors semaine d'arrivée = avertissement direct (Règle 2).
+    - Régime ASSOUPLI (définitif, dès qu'un streak de GRADUATION_STREAK GDC
+      consécutives complètes a été atteint une fois) : 1ère GDC incomplète
+      de la fenêtre glissante des NB_GDC dernières GDC = grâce automatique,
+      les suivantes = avertissement (Règle 4).
+
+    `consecutive_complete` compte les GDC consécutives réellement complètes
+    (decks pleins ET pas de bateau) depuis le début de l'historique — remis à
+    zéro par toute GDC incomplète OU toute attaque de bateau. Dès qu'il
+    atteint GRADUATION_STREAK, `graduated` passe à True à VIE (le joueur ne
+    repasse jamais en régime strict, même si `consecutive_complete` retombe
+    ensuite à zéro) et `graduation_index` retient l'index de cette semaine
+    (utilisé pour exclure les GDC d'AVANT la graduation des candidates à la
+    grâce de la Règle 4 — une GDC incomplète jugée sous le régime strict ne
+    doit pas "consommer" la grâce disponible une fois le joueur assoupli).
+    """
     out = []
+    consecutive_complete = 0
+    graduated = False
+    graduation_index: int | None = None
+
     for idx, week in enumerate(weeks):
-        window = weeks[max(0, idx - NB_GDC + 1) : idx + 1]
         is_manual = str(week["seasonId"]) in manual_seasons
-        status, motif, manual, rule = _week_status(week, window, is_manual, current_tenure)
-        out.append({**week, "status": status, "motif": motif, "manual": manual, "rule": rule})
+
+        if week["is_join_week"]:
+            out.append({
+                **week, "status": "exempt",
+                "motif": "1ère GDC du joueur dans le clan — toujours exemptée (Règle 1).",
+                "manual": False, "rule": 1,
+            })
+            continue
+
+        decks = week["decks"]
+        boats = week["boats"]
+        clean = boats == 0 and decks >= FULL_DECKS
+
+        if boats > 0:
+            base, motif, rule = "warning", f"{boats} attaque(s) de bateau adverse (Règle 3)", 3
+            consecutive_complete = 0
+        elif clean:
+            base, motif, rule = "ok", "", None
+            consecutive_complete += 1
+            if not graduated and consecutive_complete >= GRADUATION_STREAK:
+                graduated = True
+                graduation_index = idx
+        else:
+            consecutive_complete = 0
+            if not graduated:
+                base, motif, rule = "warning", (
+                    f"{decks}/{FULL_DECKS} decks joués — régime strict, pas encore "
+                    f"{GRADUATION_STREAK} GDC complètes d'affilée (Règle 2)"
+                ), 2
+            else:
+                window = list(enumerate(weeks))[max(0, idx - NB_GDC + 1): idx + 1]
+                candidates = [
+                    w for w_idx, w in window
+                    if w_idx >= graduation_index and not w["is_join_week"]
+                    and w["boats"] == 0 and w["decks"] < FULL_DECKS
+                ]
+                if candidates and candidates[0]["week_key"] == week["week_key"]:
+                    base, motif, rule = "grace", (
+                        f"{decks}/{FULL_DECKS} decks joués — 1ère GDC incomplète de la fenêtre (Règle 4)"
+                    ), 4
+                else:
+                    base, motif, rule = "warning", (
+                        f"{decks}/{FULL_DECKS} decks joués — GDC incomplète supplémentaire de la fenêtre (Règle 4)"
+                    ), 4
+
+        if is_manual and base == "warning":
+            status, final_motif, manual = "grace", f"Grâce manuelle accordée par un chef (motif initial : {motif})", True
+        else:
+            status, final_motif, manual = base, motif, False
+
+        out.append({**week, "status": status, "motif": final_motif, "manual": manual, "rule": rule})
+
     return out
 
 
@@ -426,11 +448,16 @@ def _player_report(weekly: list[dict]) -> dict:
     """
     Rapport "actuel" d'un joueur à partir de son historique de statuts
     hebdomadaires déjà calculé (voir _compute_weekly_statuses) : compte les
-    grâces/avertissements/exclusions directes sur les NB_GDC dernières
-    semaines glissantes et détermine le "bucket" final (excl/warn/grace/None).
+    grâces/avertissements sur les NB_GDC dernières semaines glissantes et
+    détermine le "bucket" final (excl/warn/grace/None).
+
+    Depuis la refonte du 18/08/2026 il n'y a plus de statut 'excl_direct' au
+    niveau d'une semaine (voir docstring du module) — le bucket "excl" ne
+    peut désormais venir que de l'accumulation de WARN_TO_EXCL_THRESHOLD
+    avertissements actifs. `excl_weeks` reste dans l'entrée renvoyée (toujours
+    vide) uniquement pour ne pas casser l'affichage existant (views/suivi.py).
     """
     trailing = weekly[-NB_GDC:]
-    excl_weeks = [w for w in trailing if w["status"] == "excl_direct"]
     warning_weeks = [w for w in trailing if w["status"] == "warning"]
     grace_weeks = [w for w in trailing if w["status"] == "grace"]
 
@@ -439,12 +466,9 @@ def _player_report(weekly: list[dict]) -> dict:
     grace_count = grace_raw % GRACE_TO_WARN_RATIO
     warning_count = len(warning_weeks) + converted_from_grace
 
-    if excl_weeks or warning_count >= WARN_TO_EXCL_THRESHOLD:
+    if warning_count >= WARN_TO_EXCL_THRESHOLD:
         bucket = "excl"
-        reasons = [f"GDC #{w['seasonId']} : {w['motif']}" for w in excl_weeks]
-        if warning_count >= WARN_TO_EXCL_THRESHOLD:
-            reasons.append(f"{warning_count} avertissement(s) actifs sur les {NB_GDC} dernières GDC")
-        reason_excl = " ; ".join(reasons)
+        reason_excl = f"{warning_count} avertissement(s) actifs sur les {NB_GDC} dernières GDC"
     elif warning_count > 0:
         bucket = "warn"
         reason_excl = None
@@ -458,7 +482,7 @@ def _player_report(weekly: list[dict]) -> dict:
     return {
         "bucket": bucket,
         "reason_excl": reason_excl,
-        "excl_weeks": excl_weeks,
+        "excl_weeks": [],
         "warning_count": warning_count,
         "warning_weeks": warning_weeks,
         "converted_from_grace": converted_from_grace,
@@ -478,9 +502,10 @@ def build_exclusion_report(
 
     `full_history` doit être l'historique le plus complet disponible (archive
     + live, voir history.get_full_history()) — PAS limité à 10 GDC : il faut
-    tout l'historique pour calculer l'ancienneté réelle (Règles 2/3/4) et
-    faire glisser correctement les compteurs (Règles 5/6), même si seules les
-    10 dernières semaines de chaque joueur comptent pour le rapport final.
+    toute la chronologie pour savoir si le joueur a déjà atteint son streak de
+    graduation (Règle 2/4) et faire glisser correctement les compteurs
+    (Règles 5/6), même si seules les 10 dernières semaines de chaque joueur
+    comptent pour le rapport final.
 
     `current_tags` : si fourni, seuls ces joueurs (membres actuels du clan)
     apparaissent dans le rapport — un joueur exclu/parti ne doit plus y figurer.

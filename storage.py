@@ -729,7 +729,15 @@ def add_suggestion(player_tag: str, player_name: str, username: str, category: s
 
 
 def _slugify_username(pseudo: str) -> str:
-    base = "".join(c.lower() if c.isalnum() else "" for c in pseudo) or "joueur"
+    """
+    Construit l'identifiant de connexion à partir du pseudo soumis à
+    l'inscription. Sensible à la casse (demande de Flo, 18/08/2026) : avant,
+    tout était forcé en minuscules, obligeant par exemple un joueur inscrit
+    en tant que "Plutonus" à se reconnecter avec "plutonus" — corrigé en ne
+    filtrant plus que les caractères non alphanumériques, sans toucher à la
+    casse de ceux qui restent.
+    """
+    base = "".join(c for c in pseudo if c.isalnum()) or "joueur"
     accounts = get_accounts()
     candidate = base
     i = 2
